@@ -35,18 +35,24 @@ parser.add_argument('-side_ausgabe', default=16, type=int, help='side of volumet
 parser.add_argument('-num_joints', default=17, type=int, help='number of joints in the dataset')
 parser.add_argument('-depth', default=16, type=int, help='depth side of volumetric heatmap')
 
-# float options
+# train options
 parser.add_argument('-learn_rate', default=1e-4, type=float, help='Base learning rate of training')
 parser.add_argument('-grad_norm', default=5.0, type=float, help='norm for gradient clip')
 parser.add_argument('-momentum', default=0.9, type=float, help='Momentum for training')
 parser.add_argument('-weight_decay', default=4e-5, type=float, help='Weight decay for training')
-parser.add_argument('-crop_factor_train', default=1.0, type=float, help='crop factor for train')
-parser.add_argument('-crop_factor_test', default=1.0, type=float, help='crop factor for test')
+parser.add_argument('-box_margin', default=0.9, type=float, help='scale factor for pseudo bbox')
+
+# evaluation options
 parser.add_argument('-score_thresh', default=150.0, type=float, help='threshold for score analysis')
 parser.add_argument('-perfect_thresh', default=10.0, type=float, help='threshold for perfect prediction')
 parser.add_argument('-good_thresh', default=30.0, type=float, help='threshold for good prediction')
 parser.add_argument('-jitter_thresh', default=100.0, type=float, help='threshold for jittered prediction')
 parser.add_argument('-depth_range', default=1000.0, type=float, help='depth range of prediction')
+
+# augmentation options
+parser.add_argument('-crop_factor_train', default=1.0, type=float, help='crop factor for train')
+parser.add_argument('-crop_factor_test', default=1.0, type=float, help='crop factor for test')
 parser.add_argument('-chance_occlude', default=0.8, type=float, help='chance for performing an occlusion augmentation')
+parser.add_argument('-random_zoom', default=0.9, type=float, help='scale for random zoom operation')
 
 args = parser.parse_args()

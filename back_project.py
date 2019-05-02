@@ -107,17 +107,17 @@ def get_image_coords(seq_names, start_frames, end_frames, interval, n_cams):
                 continue
 
             skeleton = np.array(skeleton[0]['joints19'])
-            skeleton = skeleton.reshape((-1,4)).transpose()  # (4, 19)
+            skeleton = skeleton.reshape((-1,4)).transpose()  # (4 x 19)
 
             for cam_idx, cam in enumerate(cameras):
 
-                image_coord = projectPoints(skeleton[:3], cam)  # (3, 19)
+                image_coord = projectPoints(skeleton[:3], cam)  # (3 x 19)
 
                 # image_path = os.path.join(camera_folders[cam_idx], cam['name'] + '_' + str(frame).zfill(8) + '.jpg')
                 # show_skeleton(image_path, image_coord, skeleton[3])
 
-                image_coord = np.concatenate((image_coord[:2], skeleton[3:]), axis = 0)  # (3, 19)
-                image_coords[cam_idx].append(image_coord.transpose())  # (19, 3)
+                image_coord = np.concatenate((image_coord[:2], skeleton[3:]), axis = 0)  # (3 x 19)
+                image_coords[cam_idx].append(image_coord.transpose())  # (19 x 3)
 
             print 'frame [', start_frames[seq_idx], '-', frame, '|', end_frames[seq_idx], '] processed'
 

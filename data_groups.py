@@ -14,49 +14,35 @@ from utils import PoseSample
 from utils import PoseGroup
 from functools import partial
 
+
 pose_folder = 'hdPose3d_stage1_coco19'
 
-def parse_json(json_path):
-	ids = []
-	poses = []
 
-	with open(json_path) as json_file:
-		bodies = json.load(json_file)['bodies']
-		for body in bodies:
-			ids.append(body['id'])
-			poses.append(body['joints19'])
-
-	poses = [np.array(pose).reshape((19, 4)) for pose in poses]
-	return dict(ids = ids, poses = np.stack(poses).tolist())
-
-
-def load_poses(seq_path, start_frame, end_frame, interval):
-	assert os.path.isfile(os.path.join(seq_path, pose_folder, 'body3DScene_' + str(start_frame).zfill(8) + '.json'))
-	assert os.path.isfile(os.path.join(seq_path, pose_folder, 'body3DScene_' + str(end_frame).zfill(8) + '.json'))
-
-	sample_frames = range(start_frame, end_frame, interval)
-	json_files = [os.path.join(seq_path, pose_folder, 'body3DScene_' + str(frame).zfill(8) + '.json') for frame in sample_frames]
-
-	return [parse_json(json_file) for json_file in json_files]
-
-
-def get_cameras(json_file):
+def get_cameras(json_file, cam_names):
 	
     calibration = json.load(open(json_file))
 
     cameras = [cam for cam in calibration['cameras'] if cam['panel'] == 0]
 
-    return [cameralib.Camera(
+    return dict(
+    		[
+    			(
+    				cam['name'],
+    				cameralib.Camera(
     						np.array(cam['t']).flatten(),
     						np.array(cam['R']),
     						np.array(cam['K']),
     						np.array(cam['distCoef'])
-    			) for cam in cameras]
+    				)
+    			) for cam in cameras if cam['name'] in cam_names
+    		]
+    	)
 
 
-def make_sample(data_sample, camera, args):
+def make_sample(data_sample, data_params, camera):
 
-	image_path, image_coord, bbox, body_pose, folder_down, phase = data_sample
+	image_path, image_coord, bbox, body_pose = data_sample
+	folder_down, side_eingabe, random_zoom = data_params
 
 	max_rotate = np.pi / 6
 
@@ -69,7 +55,7 @@ def make_sample(data_sample, camera, args):
 
 	box_center = bbox[:2] + bbox[2:] / 2
 
-	scale_factor = min(base_dst_side / np.max(bbox[2:]) / args.random_zoom, 1.0)
+	scale_factor = min(side_eingabe / np.max(bbox[2:]) / args.random_zoom, 1.0)
 
 	dest_side = expand_side * scale_factor
 
@@ -105,7 +91,7 @@ def coord_to_box(image_coord, box_margin):
 	center = np.array([(x_min + x_max) / 2, (y_min + y_max) / 2])
 	shape = np.array([x_max - x_min, y_max - y_min])
 
-	return np.hstack([center - shape * box_margin / 2, shape * box_margin])
+	return np.hstack([center - shape / box_margin / 2, shape / box_margin])
 
 def get_cmu_panoptic_group(phase, args):
 
@@ -142,51 +128,58 @@ def get_cmu_panoptic_group(phase, args):
 		root_sequence = os.path.join(args.root_path, sequence)
 		root_image = os.path.join(root_sequence, 'hdImgs')
 
-		cam_files = [os.path.join(root_image, file) for file in os.listdir(root_image)]
-		cam_files = [file for file in cam_files if os.path.isfile(file)]
-		cam_files.sort()
-		cam_files = [json.load(open(cam_file)) for cam_file in cam_files]
-
 		cam_folders = [os.path.join(root_image, folder) for folder in os.listdir(root_image)]
 		cam_folders = [folder for folder in cam_folders if os.path.isdir(folder)]
 		cam_folders.sort()
+
 		cam_names = [os.path.basename(folder) for folder in cam_folders]
+
+		cam_files = [os.path.join(root_image, 'image_coord_' + cam_name + '.jpg') for cam_name in cam_names]
+		cam_files = [json.load(open(file)) for file in cam_files]
+
+		down_folders = [os.path.join(args.root_down, sequence + '.' + cam_name) for cam_name in cam_names]
 
 		start_frame = cam_files[0]['start_frame']
 		end_frame = cam_files[0]['end_frame']
 		interval = cam_files[0]['interval']
 
+		cam_folders = dict(zip(cam_names, cam_folders))
+		cam_files = dict(zip(cam_names, cam_files))		
+		down_folders = dict(zip(cam_names, down_folders))
+		
+		cameras = get_cameras(os.path.join(root_sequence, 'calibration_' + seq_name + '.json'), cam_names)
 		bodies = load_poses(root_sequence, start_frame, end_frame, interval)
-		cameras = get_cameras(os.path.join(root_sequence, 'calibration_' + seq_name + '.json'))[:len(cam_files)]
+		
+		pose_idx = 0
 
-		pose_frame_idx = 0
+		root_skeleton = os.path.join(root_sequence, 'hdPose3d_stage1_coco19')
 
-		cam_folder_down = [os.path.join(args.root_down, sequence + '.' + cam_name) for cam_name in cam_names]
+		for frame_idx, frame in enumerate(xrange(start_frame, end_frame, interval)):
 
-		for frame_idx, body in enumerate(bodies):
+			skeleton = os.path.join(root_skeleton, 'body3DScene_' + str(frame).zfill(8) + '.json')
+            skeleton = json.load(open(skeleton))['bodies']
+            if not skeleton:
+                continue
 
-			if not body['poses']:
-				continue
+            body_pose = np.array(skeleton[0]['joints19'])
 
-			body_pose = np.array(body['poses'][0])
+			for cam_name in cam_names:
 
-			for cam_idx, cam_folder in enumerate(cam_folders):
-
-				frame = frame_idx * interval + start_frame
-
-				if frame_idx * interval % frame_step[phase] != 0:
+				if frame - start_frame % frame_step[phase] != 0:
 					continue
 
-				image_path = os.path.join(root_image, cam_folder, cam_folder + '_' + str(frame).zfill(8) + '.jpg')
-				image_coord = np.array(cam_files[cam_idx]['image_coord'][pose_frame_idx])
+				image_path = os.path.join(cam_folders[cam_name], cam_name + '_' + str(frame).zfill(8) + '.jpg')
+				image_coord = np.array(cam_files[cam_name]['image_coord'][pose_idx])
 				image_box = coord_to_box(image_coord, args.box_margin)
 
-				data_sample = (image_path, image_coord, image_box, body_pose, cam_folder_down[cam_idx], phase)
-				processes.append(pool.apply_async(func = make_sample, args = (data_sample, camera[cam_idx], args.side_eingabe)))
+				data_sample = (image_path, image_coord, image_box, body_pose)
+				data_params = (down_folders[cam_name], args.side_eingabe, args.random_zoom)
+
+				processes.append(pool.apply_async(func = make_sample, args = (data_sample, data_params, cameras[cam_name])))
 
 			print 'collecting samples [', str(frame_idx) + '/' + str(len(bodies)), '] sequence', sequence
 
-			pose_frame_idx += 1
+			pose_idx += 1
 
 	pool.close()
 	pool.join()
