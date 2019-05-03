@@ -4,7 +4,9 @@ import matplotlib.pyplot as plt
 import sys
 import os
 
+
 data_path = '/globalwork/liu/cmu_panoptic'
+
 
 def projectPoints(X, cam):
     """
@@ -75,71 +77,74 @@ def show_skeleton(image_path, image_coord, confidence):
     plt.show()
 
 
-def get_image_coords(seq_names, start_frames, end_frames, interval, n_cams):
+def get_image_coords(seq_name, start_frame, end_frame, interval):
+    pose_folder = os.path.join(data_path, seq_name, 'hdPose3d_stage1_coco19')
+    image_root = os.path.join(data_path, seq_name, 'hdImgs')
 
-    assert len(seq_names) == len(start_frames)
-    assert len(seq_names) == len(end_frames)
+    cam_folders = [os.path.join(image_root, folder) for folder in os.listdir(image_root)]
+    cam_folders = [folder for folder in cam_folders if os.path.isdir(folder)]
+    cam_folders.sort()
 
-    for seq_idx, seq_name in enumerate(seq_names):
-        skeleton_dir = os.path.join(data_path, seq_name, 'hdPose3d_stage1_coco19')
-        image_root = os.path.join(data_path, seq_name, 'hdImgs')
+    cam_names = [os.path.basename(folder) for folder in cam_folders]
 
-        calib = os.path.join(data_path, seq_name, 'calibration_' + seq_name + '.json')
-        calib = json.load(open(calib))
+    cam_folders = dict(zip(cam_names, cam_folders))
+    image_coords = dict([(name, []) for name in cam_names])
 
-        cameras = [cam for cam in calib['cameras'] if cam['panel'] == 0][:n_cams]
+    calib = os.path.join(data_path, seq_name, 'calibration_' + seq_name + '.json')
+    calib = json.load(open(calib))
 
-        for cam in cameras:
-            cam['K'] = np.matrix(cam['K'])
-            cam['distCoef'] = np.array(cam['distCoef'])
-            cam['R'] = np.matrix(cam['R'])
-            cam['t'] = np.array(cam['t'])
+    cameras = [cam for cam in calib['cameras'] if cam['panel'] == 0]
 
-        image_coords = [[] for x in xrange(len(cameras))]
+    for cam in cameras:
+        cam['K'] = np.matrix(cam['K'])
+        cam['distCoef'] = np.array(cam['distCoef'])
+        cam['R'] = np.matrix(cam['R'])
+        cam['t'] = np.array(cam['t'])
 
-        camera_folders = [os.path.join(image_root, cam['name']) for cam in cameras]
+    cameras = dict([(cam['name'], cam) for cam in cameras if cam['name'] in cam_names])
 
-        for frame in xrange(start_frames[seq_idx], end_frames[seq_idx], interval):
+    for frame in xrange(start_frame, end_frame, interval):
+        skeleton = os.path.join(pose_folder, 'body3DScene_' + str(frame).zfill(8) + '.json')
+        skeleton = json.load(open(skeleton))['bodies']
+        
+        if not skeleton:
+            continue
 
-            skeleton = os.path.join(skeleton_dir, 'body3DScene_' + str(frame).zfill(8) + '.json')
-            skeleton = json.load(open(skeleton))['bodies']
-            if not skeleton:
-                continue
+        skeleton = np.array(skeleton[0]['joints19'])
+        skeleton = skeleton.reshape((-1,4)).transpose()  # (4 x 19)
 
-            skeleton = np.array(skeleton[0]['joints19'])
-            skeleton = skeleton.reshape((-1,4)).transpose()  # (4 x 19)
+        for name in cam_names:
 
-            for cam_idx, cam in enumerate(cameras):
+            image_coord = projectPoints(skeleton[:3], cameras[name])  # (3 x 19)
 
-                image_coord = projectPoints(skeleton[:3], cam)  # (3 x 19)
+            # image_path = os.path.join(cam_folders[name], name + '_' + str(frame).zfill(8) + '.jpg')
+            # show_skeleton(image_path, image_coord, skeleton[3])
 
-                # image_path = os.path.join(camera_folders[cam_idx], cam['name'] + '_' + str(frame).zfill(8) + '.jpg')
-                # show_skeleton(image_path, image_coord, skeleton[3])
+            image_coord = np.concatenate((image_coord[:2], skeleton[3:]), axis = 0)  # (3 x 19)
+            image_coords[name].append(image_coord.transpose())  # (19 x 3)
 
-                image_coord = np.concatenate((image_coord[:2], skeleton[3:]), axis = 0)  # (3 x 19)
-                image_coords[cam_idx].append(image_coord.transpose())  # (19 x 3)
+        print 'frame [', start_frame, '-', frame, '|', end_frame, '] processed'
 
-            print 'frame [', start_frames[seq_idx], '-', frame, '|', end_frames[seq_idx], '] processed'
+    print 'saving collected image coords'
 
-        print 'saving collected image coords'
+    for name in cam_names:
+        save_path = os.path.join(image_root, 'image_coord_' + name + '.json')
+        image_coord = np.stack(image_coords[name]).tolist()
 
-        for cam_idx, cam in enumerate(cameras):
-            save_path = os.path.join(image_root, 'image_coord_' + cam['name'] + '.json')
-            image_coord = np.stack(image_coords[cam_idx]).tolist()
-
-            with open(save_path, 'w') as file:
-                print >> file, json.dumps(
-                                dict(
-                                    start_frame = start_frames[seq_idx],
-                                    end_frame = end_frames[seq_idx],
-                                    interval = interval,
-                                    image_coord = image_coord))
-                file.close()
+        with open(save_path, 'w') as file:
+            print >> file, json.dumps(
+                            dict(
+                                start_frame = start_frame,
+                                end_frame = end_frame,
+                                interval = interval,
+                                image_coord = image_coord))
+            file.close()
 
 
-def main(interval, n_cams, seq_info):
-    get_image_coords(seq_info[::3], [int(x) for x in seq_info[1::3]], [int(x) for x in seq_info[2::3]], int(interval), int(n_cams))
+def main(interval, seq_name, start_frame, end_frame):
+    get_image_coords(seq_name, int(start_frame), int(end_frame), int(interval))
 
 
 if __name__ == '__main__':
-    main(sys.argv[1], sys.argv[2], sys.argv[3:])
+    assert len(sys.argv[1:]) == 4
+    main(*sys.argv[1:])
