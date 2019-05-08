@@ -74,19 +74,20 @@ def make_sample(data_sample, data_params, camera):
 		pt_c = (round_box[0] + round_box[2], round_box[1] + round_box[3])
 		pt_d = (round_box[0],          round_box[1] + round_box[3])
 		
-		cv2.line(image, pt_a, pt_b, color = (0, 255, 255), thickness = 5)
-		cv2.line(image, pt_b, pt_c, color = (0, 255, 255), thickness = 5)
-		cv2.line(image, pt_c, pt_d, color = (0, 255, 255), thickness = 5)
-		cv2.line(image, pt_d, pt_a, color = (0, 255, 255), thickness = 5)
+		cv2.line(image, pt_a, pt_b, color = (0, 255, 255), thickness = 2)
+		cv2.line(image, pt_b, pt_c, color = (0, 255, 255), thickness = 2)
+		cv2.line(image, pt_c, pt_d, color = (0, 255, 255), thickness = 2)
+		cv2.line(image, pt_d, pt_a, color = (0, 255, 255), thickness = 2)
 
 		return image
 
 	if not os.path.exists(new_path):
 		image = jpeg4py.JPEG(image_path).decode()
+
 		new_image = cameralib.reproject_image(image, camera, new_camera, (dest_side, dest_side))
 
-		cv2.imwrite(new_path, draw(new_image[:, :, ::-1], new_bbox))
-		# cv2.imwrite(new_path, new_image[:, :, ::-1])
+		# cv2.imwrite(new_path, draw(new_image[:, :, ::-1], new_bbox))
+		cv2.imwrite(new_path, new_image[:, :, ::-1])
 
 	return PoseSample(new_path, body_pose, image_coord, new_bbox, new_camera)
 
@@ -168,8 +169,6 @@ def get_cmu_panoptic_group(phase, args):
 
 		root_skeleton = os.path.join(root_sequence, 'hdPose3d_stage1_coco19')
 
-		flag = False
-
 		for frame_idx, frame in enumerate(xrange(start_frame, end_frame, interval)):
 
 			skeleton = os.path.join(root_skeleton, 'body3DScene_' + str(frame).zfill(8) + '.json')
@@ -177,9 +176,7 @@ def get_cmu_panoptic_group(phase, args):
 			if not skeleton:
 				continue
 
-			flag = True
-
-			body_pose = np.array(skeleton[0]['joints19'])
+			body_pose = np.array(skeleton[0]['joints19']).reshape((-1,4))[:, :3]
 
 			for cam_name in cam_names:
 
@@ -201,9 +198,6 @@ def get_cmu_panoptic_group(phase, args):
 			print 'collecting samples [', str(frame_idx) + '/' + str((end_frame - start_frame) / interval), '] sequence', sequence
 
 			pose_idx += 1
-
-			if flag:
-				break
 
 	pool.close()
 	pool.join()
