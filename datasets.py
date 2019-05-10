@@ -49,7 +49,6 @@ class TrainSet(data.Dataset):
 
         self.crop_factor = args.crop_factor_train
         self.side_eingabe = args.side_eingabe
-        self.univ_skeleton = args.univ_skeleton
         self.do_perturbate = args.do_perturbate
         self.do_occlude = args.do_occlude
         self.chance_occlude = args.chance_occlude
@@ -99,7 +98,7 @@ class TrainSet(data.Dataset):
             camera.zoom(np.random.uniform(self.random_zoom, self.random_zoom ** (-1)))
             camera.rotate(roll = np.random.uniform(- np.pi / 6, np.pi / 6))
 
-        world_coords = sample.univ_coords if self.univ_skeleton else sample.world_coords
+        world_coords = sample.body_pose
 
         if np.random.rand() < 0.5:
             camera.horizontal_flip()
@@ -141,7 +140,6 @@ class TestSet(data.Dataset):
 
         self.crop_factor = args.crop_factor_test
         self.side_eingabe = args.side_eingabe
-        self.univ_skeleton = args.univ_skeleton
 
         self.joint_info = pose_group.joint_info
         self.samples = pose_group.samples
@@ -176,7 +174,7 @@ class TestSet(data.Dataset):
         camera.zoom(self.side_eingabe / side_crop * self.crop_factor)
         camera.center_principal((self.side_eingabe, self.side_eingabe))
 
-        world_coords = sample.univ_coords if self.univ_skeleton else sample.world_coords
+        world_coords = sample.body_pose
 
         camera_coords = camera.world_to_camera(world_coords)
         image_coords = camera.camera_to_image(camera_coords)

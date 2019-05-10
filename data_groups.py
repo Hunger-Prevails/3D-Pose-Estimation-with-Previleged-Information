@@ -41,13 +41,13 @@ def make_sample(data_sample, data_params, camera):
 	image_path, image_coord, bbox, body_pose = data_sample
 	folder_down, side_eingabe, random_zoom = data_params
 
-	max_rotate = np.pi / 6
+	try:
+		assert np.all(bbox[:2] >= 0)
+		assert np.all(bbox[:2] + bbox[2:] <= np.array([1920, 1080]))
+	except:
+		return None
 
-	rotation = np.array([
-							[np.cos(max_rotate), np.sin(max_rotate)],
-							[np.sin(max_rotate), np.cos(max_rotate)]
-						])
-	expand_side = np.max(np.matmul(rotation, bbox[2:]))
+	expand_side = np.sum(bbox[2:] ** 2) ** 0.5
 
 	box_center = bbox[:2] + bbox[2:] / 2
 
@@ -69,10 +69,10 @@ def make_sample(data_sample, data_params, camera):
 		
 		round_box = [int(np.round(x)) for x in box]
 
-		pt_a = (round_box[0],          round_box[1])
+		pt_a = (round_box[0],                round_box[1])
 		pt_b = (round_box[0] + round_box[2], round_box[1])
 		pt_c = (round_box[0] + round_box[2], round_box[1] + round_box[3])
-		pt_d = (round_box[0],          round_box[1] + round_box[3])
+		pt_d = (round_box[0],                round_box[1] + round_box[3])
 		
 		cv2.line(image, pt_a, pt_b, color = (0, 255, 255), thickness = 2)
 		cv2.line(image, pt_b, pt_c, color = (0, 255, 255), thickness = 2)
@@ -126,7 +126,7 @@ def get_cmu_panoptic_group(phase, args):
 	joint_info = JointInfo(short_names, parents, mirror)
 
 	sequences = dict(
-		train = ['171204_pose1', '171204_pose2', '171026_pose1', '171026_pose2'],
+		train = ['171204_pose1', '171204_pose2', '171026_pose1', '171026_pose2', '171204_pose4', '171204_pose5', '171204_pose6'],
 		validation = ['171204_pose3'],
 		test = ['171026_pose3']
 	)
@@ -203,7 +203,7 @@ def get_cmu_panoptic_group(phase, args):
 	pool.join()
 	samples = [process.get() for process in processes]
 
-	return PoseGroup(phase, joint_info, samples)
+	return PoseGroup(phase, joint_info, [sample for sample in samples if sample])
 
 
 def get_mpi_3dhp_group(phase, args):

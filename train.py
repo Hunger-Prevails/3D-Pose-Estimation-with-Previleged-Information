@@ -73,7 +73,7 @@ class Trainer:
 
             prediction = utils.to_coordinate(planar_coords, depth, true_coords, inv_intrinsics, cuda_device)
 
-            loss = self.criterion(prediction / 10.0, true_coords / 10.0)
+            loss = self.criterion(prediction, true_coords)
 
             self.optimizer.zero_grad()
             loss.backward()
@@ -132,7 +132,7 @@ class Trainer:
 
                 prediction = utils.to_coordinate(planar_coords, depth, true_coords_cuda, inv_intrinsics, cuda_device)
 
-                loss = self.criterion(prediction / 10.0, true_coords_cuda / 10.0)
+                loss = self.criterion(prediction, true_coords_cuda)
 
                 loss_avg += loss.item() * batch_size
                 total += batch_size
