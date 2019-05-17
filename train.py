@@ -19,6 +19,7 @@ class Trainer:
         self.side_ausgabe = args.side_ausgabe
         self.depth_range = args.depth_range
         self.flip_test = args.flip_test
+        self.semi_cubic = args.semi_cubic
 
         self.learn_rate = args.learn_rate
         self.num_epochs = args.n_epochs
@@ -48,12 +49,12 @@ class Trainer:
 
         cuda_device = torch.device('cuda')
 
-        for i, (image, true_coords, inv_intrinsics) in enumerate(train_loader):
+        for i, (image, true_coords, intrinsics) in enumerate(train_loader):
             
             if self.nGPU > 0:
                 image = image.to(cuda_device)
                 true_coords = true_coords.to(cuda_device)
-                inv_intrinsics = inv_intrinsics.to(cuda_device)
+                intrinsics = intrinsics.to(cuda_device)
                 
             batch_size = image.size(0)
             
@@ -68,10 +69,16 @@ class Trainer:
                 heatmap_flip = heatmap_flip[:, self.joint_info.mirror, :, ::-1]
 
                 heatmap = 0.5 * (heatmap + heatmap_flip)
-            
-            planar_coords, depth = utils.decode(heatmap, self.side_eingabe, self.depth_range, cuda_device)
 
-            prediction = utils.to_coordinate(planar_coords, depth, true_coords, inv_intrinsics, cuda_device)
+            key_index = self.joint_info.key_index
+
+            if self.semi_cubic:
+                key_depth = true_coords[:, key_index:key_index + 1, 2]
+                prediction = utils.to_coordinate(heatmap, self.side_eingabe, self.depth_range, intrinsics, key_depth, cuda_device)
+            else:
+                prediction = utils.decode(heatmap, self.depth_range, cuda_device)
+                prediction -= prediction[:, key_index:key_index + 1]
+                true_coords -= true_coords[:, key_index:key_index + 1]
 
             loss = self.criterion(prediction, true_coords)
 
@@ -106,12 +113,12 @@ class Trainer:
 
         scores_and_stats = []
 
-        for i, (image, true_coords, inv_intrinsics, back_rotation) in enumerate(test_loader):
+        for i, (image, true_coords, intrinsics, back_rotation) in enumerate(test_loader):
             
             if self.nGPU > 0:
                 image = image.to(cuda_device)
-                true_coords_cuda = true_coords.to(cuda_device)
-                inv_intrinsics = inv_intrinsics.to(cuda_device)
+                true_coords = true_coords.to(cuda_device)
+                intrinsics = intrinsics.to(cuda_device)
 
             batch_size = image.size(0)
 
@@ -127,20 +134,26 @@ class Trainer:
                     heatmap_flip = heatmap_flip[:, self.joint_info.mirror, :, ::-1]
 
                     heatmap = 0.5 * (heatmap + heatmap_flip)
-                
-                planar_coords, depth = utils.decode(heatmap, self.side_eingabe, self.depth_range, cuda_device)
 
-                prediction = utils.to_coordinate(planar_coords, depth, true_coords_cuda, inv_intrinsics, cuda_device)
+                key_index = self.joint_info.key_index
 
-                loss = self.criterion(prediction, true_coords_cuda)
+                if self.semi_cubic:
+                    key_depth = true_coords[:, key_index:key_index + 1, 2]
+                    prediction = utils.to_coordinate(heatmap, self.side_eingabe, self.depth_range, intrinsics, key_depth, cuda_device)
+                    loss = self.criterion(prediction, true_coords)
+                else:
+                    prediction = utils.decode(heatmap, self.depth_range, cuda_device)
+                    relative = prediction - prediction[:, key_index:key_index + 1]
+                    true_relative = true_coords - true_coords[:, key_index:key_index + 1]
+                    loss = self.criterion(relative, true_relative)                
 
                 loss_avg += loss.item() * batch_size
                 total += batch_size
 
-            prediction = prediction.cpu().numpy()
-            true_coords = true_coords.numpy()
+            relative = relative.cpu().numpy()
+            true_coords = true_coords.cpu().numpy()
             
-            prediction += true_coords[:, -1:] - prediction[:, -1:]
+            prediction = relative + true_coords[:, -1:]
 
             prediction = np.einsum('Bij,BCj->BCi', back_rotation, prediction)
             true_coords = np.einsum('Bij,BCj->BCi', back_rotation, true_coords)

@@ -63,3 +63,5 @@ cmu_panoptic_pairs = dict(
 		('rEye', 'lEye')
 	]
 )
+
+cmu_panoptic_key_index = 2

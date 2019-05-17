@@ -23,13 +23,20 @@ class PoseGroup:
 
 
 class JointInfo:
-	def __init__(self, short_names, parents, mirror):
+	def __init__(self, short_names, parents, mirror, key_index):
 		self.short_names = short_names
 		self.parents = parents
 		self.mirror = mirror
+		self.key_index = key_index
 
 
 def to_heatmap(ausgabe, depth, num_joints, height, width):
+	'''
+	performs axis permutation and numerically stable softmax to output feature map
+
+	returns:
+		volumetric heatmap of shape(batch_size, num_joints, height, width, depth)
+	'''
 	heatmap = ausgabe.view(-1, depth, num_joints, height, width)
 	heatmap = heatmap.permute(0, 2, 3, 4, 1).contiguous()
 	
@@ -42,7 +49,17 @@ def to_heatmap(ausgabe, depth, num_joints, height, width):
 	return heatmap.view(-1, num_joints, height, width, depth)
 
 
-def decode(heatmap, side_eingabe, depth_range, cuda_device):
+def to_coordinate(heatmap, side_eingabe, depth_range, intrinsics, key_depth, cuda_device):
+	'''
+	Function:
+		Performs position interpolation over each axis
+		Maps interpolation results over x and y axis to a range of [0, side_eingabe]
+		Maps interpolation results over z axis to a range of [- depth_range, depth_range]
+		Transforms homogeneous 2D coordinates into 3D camera coordinates
+	Args:
+		heatmap: (batch_size, num_joints, height, width, depth)
+		key_depth: (batch_size, 1)
+	'''
 	height_map = torch.sum(heatmap, dim = (3, 4))
 	width_map = torch.sum(heatmap, dim = (2, 4))
 	depth_map = torch.sum(heatmap, dim = (2, 3))
@@ -51,37 +68,32 @@ def decode(heatmap, side_eingabe, depth_range, cuda_device):
 	width_grid = torch.linspace(0.0, 1.0, width_map.size(-1)).view(1, 1, -1).to(cuda_device)
 	depth_grid = torch.linspace(0.0, 2.0, depth_map.size(-1)).view(1, 1, -1).to(cuda_device)
 
+	height = torch.sum(height_grid * height_map, dim = 2) * side_eingabe
+	width = torch.sum(width_grid * width_map, dim = 2) * side_eingabe
+	depth = torch.sum(depth_grid * depth_map, dim = 2) * depth_range - depth_range
+	extension = torch.ones_like(height, device = cuda_device)
+
+	prediction = torch.einsum('Bij,BCj->BCi', intrinsics, torch.stack((width, height, extension), dim = -1))  # (batch_size, num_joints, 3)
+	return prediction * (depth + key_depth).unsqueeze(-1)  # (batch_size, num_joints, 3)
+
+
+def decode(heatmap, depth_range, cuda_device):
+	'''
+	performs position interpolation over each axis
+	'''
+	height_map = torch.sum(heatmap, dim = (3, 4))
+	width_map = torch.sum(heatmap, dim = (2, 4))
+	depth_map = torch.sum(heatmap, dim = (2, 3))
+
+	height_grid = torch.linspace(0.0, 2.0, height_map.size(-1)).view(1, 1, -1).to(cuda_device)
+	width_grid = torch.linspace(0.0, 2.0, width_map.size(-1)).view(1, 1, -1).to(cuda_device)
+	depth_grid = torch.linspace(0.0, 2.0, depth_map.size(-1)).view(1, 1, -1).to(cuda_device)
+
 	height = torch.sum(height_grid * height_map, dim = 2)
 	width = torch.sum(width_grid * width_map, dim = 2)
 	depth = torch.sum(depth_grid * depth_map, dim = 2)
 
-	planar_coords = torch.stack((width, height), dim = -1) * side_eingabe
-	depth = depth_range * depth - depth_range
-
-	return planar_coords, depth
-	
-
-def to_coordinate(planar_coords, depth, true_coords, inv_intrinsics, cuda_device):
-	'''
-	Maps planar coords and depth to prediction under rotated camera.
-	
-	Args:
-		planar_coords: (batch_size, num_joints, 2)
-		depth: (batch_size, num_joints)
-		true_coords: (batch_size, num_joints, 3)
-		return: (batch_size, num_joints, 3)
-	'''
-	return torch.einsum(
-		'bij,bcj->bci',
-		inv_intrinsics,
-		torch.cat(
-			(
-				planar_coords,
-				torch.ones(planar_coords.size()[:-1]).unsqueeze(-1).to(cuda_device)
-			), 
-			dim = -1
-		)
-	) * (depth + true_coords[:, -1:, 2]).unsqueeze(-1)
+	return torch.stack((width, height, depth), dim = 2) * depth_range
 
 
 def statistics(dist_cubic, dist_mirrored, dist_planar, thresholds):

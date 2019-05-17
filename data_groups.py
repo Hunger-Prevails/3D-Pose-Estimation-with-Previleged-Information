@@ -109,6 +109,7 @@ def get_cmu_panoptic_group(phase, args):
 	from joint_settings import cmu_panoptic_short_names as short_names
 	from joint_settings import cmu_panoptic_parents as parents
 	from joint_settings import cmu_panoptic_pairs as pairs
+	from joint_settings import cmu_panoptic_key_index as key_index
 
 	mapper = dict(zip(short_names, range(len(short_names))))
 	mapped = [mapper[pairs[name]] for name in short_names if name in pairs]
@@ -116,7 +117,7 @@ def get_cmu_panoptic_group(phase, args):
 	mirror = np.arange(len(short_names))
 	mirror[np.array([name in pairs for name in short_names])] = np.array(mapped)
 
-	joint_info = JointInfo(short_names, parents, mirror)
+	joint_info = JointInfo(short_names, parents, mirror, key_index)
 
 	sequences = dict(
 		train = ['171204_pose1', '171204_pose2', '171026_pose1', '171026_pose2', '171204_pose4', '171204_pose5', '171204_pose6'],
