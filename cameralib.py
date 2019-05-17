@@ -46,7 +46,7 @@ class Camera:
                 the camera wants to roll itself upright.
         """
         self.R = np.asarray(rot_matrix_world_to_cam, np.float32)
-        self.t = np.asarray(optical_center, np.float32)
+        self.t = np.asarray(optical_center.flatten(), np.float32)
 
         # self._extrinsic_matrix = build_extrinsic_matrix(self.R, self.t)
 

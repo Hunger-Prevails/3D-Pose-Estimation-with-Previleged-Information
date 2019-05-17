@@ -26,7 +26,7 @@ def get_cameras(json_file, cam_names):
 				(
 					cam['name'],
 					cameralib.Camera(
-							np.array(cam['t']).flatten(),
+							np.matmul(np.array(cam['R']).T, - np.array(cam['t'])),
 							np.array(cam['R']),
 							np.array(cam['K']),
 							np.array(cam['distCoef'])
@@ -37,6 +37,15 @@ def get_cameras(json_file, cam_names):
 
 
 def make_sample(data_sample, data_params, camera):
+	'''
+	params
+		bbox: (4,) bounding box in original camera view
+		body_pose: (19 x 3) joint coords in world space
+		image_coord: (19 x 3) joint coords in image space with confidence scores
+		image_path: path to image under original camera view
+	returns
+		pose sample with path to down-scaled image and corresponding box/image_coord
+	'''
 
 	image_path, image_coord, bbox, body_pose = data_sample
 	folder_down, side_eingabe, random_zoom = data_params
@@ -64,32 +73,15 @@ def make_sample(data_sample, data_params, camera):
 	new_bbox = cameralib.reproject_points(bbox[None, :2], camera, new_camera)[0]
 	new_bbox = np.concatenate((new_bbox, bbox[2:] * scale_factor))
 
-	def draw(image, box):
-		image = image.copy()
-		
-		round_box = [int(np.round(x)) for x in box]
-
-		pt_a = (round_box[0],                round_box[1])
-		pt_b = (round_box[0] + round_box[2], round_box[1])
-		pt_c = (round_box[0] + round_box[2], round_box[1] + round_box[3])
-		pt_d = (round_box[0],                round_box[1] + round_box[3])
-		
-		cv2.line(image, pt_a, pt_b, color = (0, 255, 255), thickness = 2)
-		cv2.line(image, pt_b, pt_c, color = (0, 255, 255), thickness = 2)
-		cv2.line(image, pt_c, pt_d, color = (0, 255, 255), thickness = 2)
-		cv2.line(image, pt_d, pt_a, color = (0, 255, 255), thickness = 2)
-
-		return image
+	new_coord = cameralib.reproject_points(image_coord[:, :2], camera, new_camera)
+	new_coord = np.concatenate((new_coord, image_coord[:, 2:]), axis = 1)
 
 	if not os.path.exists(new_path):
 		image = jpeg4py.JPEG(image_path).decode()
-
 		new_image = cameralib.reproject_image(image, camera, new_camera, (dest_side, dest_side))
-
-		# cv2.imwrite(new_path, draw(new_image[:, :, ::-1], new_bbox))
 		cv2.imwrite(new_path, new_image[:, :, ::-1])
 
-	return PoseSample(new_path, body_pose, image_coord, new_bbox, new_camera)
+	return PoseSample(new_path, body_pose, new_coord, new_bbox, new_camera)
 
 
 def coord_to_box(image_coord, box_margin):
@@ -108,6 +100,7 @@ def coord_to_box(image_coord, box_margin):
 	shape = np.array([x_max - x_min, y_max - y_min])
 
 	return np.hstack([center - shape / box_margin / 2, shape / box_margin])
+
 
 def get_cmu_panoptic_group(phase, args):
 
@@ -176,7 +169,7 @@ def get_cmu_panoptic_group(phase, args):
 			if not skeleton:
 				continue
 
-			body_pose = np.array(skeleton[0]['joints19']).reshape((-1,4))[:, :3]
+			body_pose = np.array(skeleton[0]['joints19']).reshape((-1, 4))[:, :3]
 
 			for cam_name in cam_names:
 

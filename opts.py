@@ -42,11 +42,11 @@ parser.add_argument('-weight_decay', default=4e-5, type=float, help='Weight deca
 parser.add_argument('-box_margin', default=0.8, type=float, help='scale factor for pseudo bbox')
 
 # evaluation options
-parser.add_argument('-score_thresh', default=150.0, type=float, help='threshold for score analysis')
-parser.add_argument('-perfect_thresh', default=10.0, type=float, help='threshold for perfect prediction')
-parser.add_argument('-good_thresh', default=30.0, type=float, help='threshold for good prediction')
-parser.add_argument('-jitter_thresh', default=100.0, type=float, help='threshold for jittered prediction')
-parser.add_argument('-depth_range', default=1000.0, type=float, help='depth range of prediction')
+parser.add_argument('-score_thresh', default=15.0, type=float, help='threshold for score analysis')
+parser.add_argument('-perfect_thresh', default=1.0, type=float, help='threshold for perfect prediction')
+parser.add_argument('-good_thresh', default=3.0, type=float, help='threshold for good prediction')
+parser.add_argument('-jitter_thresh', default=10.0, type=float, help='threshold for jittered prediction')
+parser.add_argument('-depth_range', default=100.0, type=float, help='depth range of prediction')
 
 # augmentation options
 parser.add_argument('-crop_factor_train', default=1.0, type=float, help='crop factor for train')
