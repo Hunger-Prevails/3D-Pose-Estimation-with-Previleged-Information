@@ -201,4 +201,4 @@ def get_cmu_panoptic_group(phase, args):
 
 
 def get_mpi_3dhp_group(phase, args):
-	pass;
+	pass

@@ -73,7 +73,7 @@ def to_coordinate(heatmap, side_eingabe, depth_range, intrinsics, key_depth, cud
 	depth = torch.sum(depth_grid * depth_map, dim = 2) * depth_range - depth_range
 	extension = torch.ones_like(height, device = cuda_device)
 
-	prediction = torch.einsum('Bij,BCj->BCi', intrinsics, torch.stack((width, height, extension), dim = -1))  # (batch_size, num_joints, 3)
+	prediction = torch.einsum('bij,bcj->bci', intrinsics, torch.stack((width, height, extension), dim = -1))  # (batch_size, num_joints, 3)
 	return prediction * (depth + key_depth).unsqueeze(-1)  # (batch_size, num_joints, 3)
 
 
@@ -96,38 +96,38 @@ def decode(heatmap, depth_range, cuda_device):
 	return torch.stack((width, height, depth), dim = 2) * depth_range
 
 
-def statistics(dist_cubic, dist_mirrored, dist_planar, thresholds):
+def statistics(cubics, reflects, tangents, thresholds):
 
 	dist = dict(
-		cubic = dist_cubic,
-		mirrored = dist_mirrored,
-		planar = dist_planar
+		cubics = cubics,
+		reflects = reflects,
+		tangents = tangents
 	)
 
 	def count_and_eliminate(condition):
-		remainings = np.nonzero(np.logical_not(condition))
+		remains = np.nonzero(np.logical_not(condition))
 
-		dist['cubic'] = dist['cubic'][remainings]
-		dist['mirrored'] = dist['mirrored'][remainings]
-		dist['planar'] = dist['planar'][remainings]
+		dist['cubics'] = dist['cubics'][remains]
+		dist['reflects'] = dist['reflects'][remains]
+		dist['tangents'] = dist['tangents'][remains]
 
 		return np.count_nonzero(condition)
 
-	count = float(dist['cubic'].size)
+	count = float(dist['cubics'].size)
 	stats = ('perfect', 'good', 'jitter', 'switch', 'depth', 'fail')
 
-	perfect = count_and_eliminate(dist['cubic'] <= thresholds['perfect']) / count
+	perfect = count_and_eliminate(dist['cubics'] <= thresholds['perfect']) / count
 	
-	good = count_and_eliminate(dist['cubic'] <= thresholds['good']) / count
+	good = count_and_eliminate(dist['cubics'] <= thresholds['good']) / count
 	
-	jitter = count_and_eliminate(dist['cubic'] <= thresholds['jitter']) / count
+	jitter = count_and_eliminate(dist['cubics'] <= thresholds['jitter']) / count
 	
-	switch = count_and_eliminate(dist['mirrored'] <= thresholds['jitter']) / count
+	switch = count_and_eliminate(dist['reflects'] <= thresholds['jitter']) / count
 	
-	depth_condition = (dist['planar'] <= thresholds['jitter'] * (2 / 3) ** 0.5) & (thresholds['jitter'] < dist['cubic'])
+	depth_condition = (dist['tangents'] <= thresholds['jitter'] * (2 / 3) ** 0.5) & (thresholds['jitter'] < dist['cubics'])
 	depth = count_and_eliminate(depth_condition) / count
 
-	return dict(zip(stats, (perfect, good, jitter, switch, depth, dist['cubic'].size / count)))
+	return dict(zip(stats, (perfect, good, jitter, switch, depth, dist['cubics'].size / count)))
 
 
 def parse_epoch(scores_and_stats, total):

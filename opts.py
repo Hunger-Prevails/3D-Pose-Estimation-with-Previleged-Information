@@ -12,6 +12,7 @@ parser.add_argument('-flip_test', action='store_true', help='whether to perform 
 parser.add_argument('-do_perturbate', action='store_true', help='whether to perform perturbation augmentation')
 parser.add_argument('-do_occlude', action='store_true', help='whether to perform occlusion augmentation')
 parser.add_argument('-semi_cubic', action='store_true', help='whether to perform semi-cubic heatmap regression')
+parser.add_argument('-valid_check', action='store_true', help='whether to threshold off invalid keypoints')
 
 # required options
 parser.add_argument('-model', required=True, help='Backbone architecture')
@@ -43,6 +44,7 @@ parser.add_argument('-weight_decay', default=4e-5, type=float, help='Weight deca
 parser.add_argument('-box_margin', default=0.8, type=float, help='scale factor for pseudo bbox')
 
 # evaluation options
+parser.add_argument('-valid_thresh', default=0.1, type=float, help='threshold for valid joints')
 parser.add_argument('-score_thresh', default=15.0, type=float, help='threshold for score analysis')
 parser.add_argument('-perfect_thresh', default=1.0, type=float, help='threshold for perfect prediction')
 parser.add_argument('-good_thresh', default=3.0, type=float, help='threshold for good prediction')

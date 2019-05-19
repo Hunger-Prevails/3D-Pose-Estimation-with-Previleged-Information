@@ -49,12 +49,13 @@ class Trainer:
 
         cuda_device = torch.device('cuda')
 
-        for i, (image, true_coords, intrinsics) in enumerate(train_loader):
+        for i, (image, true_coords, intrinsics, valid_mask) in enumerate(train_loader):
             
             if self.nGPU > 0:
                 image = image.to(cuda_device)
                 true_coords = true_coords.to(cuda_device)
                 intrinsics = intrinsics.to(cuda_device)
+                valid_mask = valid_mask.unsqueeze(-1).to(cuda_device)
                 
             batch_size = image.size(0)
             
@@ -74,13 +75,16 @@ class Trainer:
 
             if self.semi_cubic:
                 key_depth = true_coords[:, key_index:key_index + 1, 2]
+
                 prediction = utils.to_coordinate(heatmap, self.side_eingabe, self.depth_range, intrinsics, key_depth, cuda_device)
             else:
                 prediction = utils.decode(heatmap, self.depth_range, cuda_device)
+
                 prediction -= prediction[:, key_index:key_index + 1]
+
                 true_coords -= true_coords[:, key_index:key_index + 1]
 
-            loss = self.criterion(prediction, true_coords)
+            loss = self.criterion(prediction * valid_mask, true_coords * valid_mask)
 
             self.optimizer.zero_grad()
             loss.backward()
@@ -113,12 +117,13 @@ class Trainer:
 
         scores_and_stats = []
 
-        for i, (image, true_coords, intrinsics, back_rotation) in enumerate(test_loader):
+        for i, (image, true_coords, intrinsics, back_rotation, valid_mask) in enumerate(test_loader):
             
             if self.nGPU > 0:
                 image = image.to(cuda_device)
                 true_coords = true_coords.to(cuda_device)
                 intrinsics = intrinsics.to(cuda_device)
+                mask_valid = valid_mask.unsqueeze(-1).cuda()
 
             batch_size = image.size(0)
 
@@ -139,26 +144,37 @@ class Trainer:
 
                 if self.semi_cubic:
                     key_depth = true_coords[:, key_index:key_index + 1, 2]
+
                     prediction = utils.to_coordinate(heatmap, self.side_eingabe, self.depth_range, intrinsics, key_depth, cuda_device)
-                    loss = self.criterion(prediction, true_coords)
+
+                    loss = self.criterion(prediction * mask_valid, true_coords * mask_valid)
                 else:
                     prediction = utils.decode(heatmap, self.depth_range, cuda_device)
+
                     relative = prediction - prediction[:, key_index:key_index + 1]
+                    
                     true_relative = true_coords - true_coords[:, key_index:key_index + 1]
-                    loss = self.criterion(relative, true_relative)                
+
+                    loss = self.criterion(relative * mask_valid, true_relative * mask_valid)
 
                 loss_avg += loss.item() * batch_size
                 total += batch_size
 
-            relative = relative.cpu().numpy()
-            true_coords = true_coords.cpu().numpy()
+            if self.semi_cubic:
+                prediction = prediction.cpu().numpy()
+                true_coords = true_coords.cpu().numpy()
+        
+                prediction += true_coords[:, -1:] - prediction[:, -1:]
+            else:
+                relative = relative.cpu().numpy()
+                true_coords = true_coords.cpu().numpy()
             
-            prediction = relative + true_coords[:, -1:]
+                prediction = relative + true_coords[:, key_index:key_index + 1]
 
             prediction = np.einsum('Bij,BCj->BCi', back_rotation, prediction)
             true_coords = np.einsum('Bij,BCj->BCi', back_rotation, true_coords)
 
-            scores_and_stats.append(self.analyze(prediction, true_coords, self.joint_info.mirror))
+            scores_and_stats.append(self.analyze(prediction, true_coords, valid_mask, self.joint_info.mirror, key_index))
 
             print "| Epoch[%d] [%d/%d]  Loss %1.4f" % (epoch, i + 1, n_batches, loss.item())
 
@@ -173,31 +189,38 @@ class Trainer:
         return summary
 
 
-    def analyze(self, prediction, true_coords, mirror):
+    def analyze(self, prediction, true_coords, valid_mask, mirror, key_index):
         '''
         Analyzes prediction against true_coords under original camera
 
         Args:
             prediction: (batch_size, num_joints, 3)
             true_coords: (batch_size, num_joints, 3)
+            valid_mask: (batch_size, num_joints)
             mirror: (num_joints,)
 
         Returns:
             batch_size, scores and statistics
 
         '''
-        prediction -= prediction[:, -1:]
-        true_coords -= true_coords[:, -1:]
+        prediction -= prediction[:, key_index:key_index + 1]
+        true_coords -= true_coords[:, key_index:key_index + 1]
 
-        dist = np.linalg.norm(prediction - true_coords, axis = -1)  # (batch_size, num_joints)
-        dist_mirrored = np.linalg.norm(prediction - true_coords[:, mirror], axis = -1)  # (batch_size, num_joints)
-        dist_planar = np.linalg.norm(prediction[:, :, :2] - true_coords[:, :, :2], axis = -1)  # (batch_size, num_joints)
+        cubics = np.linalg.norm(prediction - true_coords, axis = -1)
+        reflects = np.linalg.norm(prediction - true_coords[:, mirror], axis = -1)
+        tangents = np.linalg.norm(prediction[:, :, :2] - true_coords[:, :, :2], axis = -1)
 
-        overall_mean = np.mean(dist)
-        score_pck = np.mean(dist / self.thresholds['score'] <= 1.0)
-        score_auc = np.mean(np.maximum(0, 1 - dist / self.thresholds['score']))
+        valid = np.where(valid_mask.flatten() == 1.0)[0]
 
-        stats = utils.statistics(dist.flatten(), dist_mirrored.flatten(), dist_planar.flatten(), self.thresholds)
+        cubics = cubics.flatten()[valid]
+        reflects = reflects.flatten()[valid]
+        tangents = tangents.flatten()[valid]
+
+        overall_mean = np.mean(cubics)
+        score_pck = np.mean(cubics / self.thresholds['score'] <= 1.0)
+        score_auc = np.mean(np.maximum(0, 1 - cubics / self.thresholds['score']))
+
+        stats = utils.statistics(cubics, reflects, tangents, self.thresholds)
 
         stats.update(dict(
                         batch_size = prediction.shape[0],

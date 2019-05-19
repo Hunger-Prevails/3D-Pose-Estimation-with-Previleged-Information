@@ -59,6 +59,8 @@ class TrainSet(data.Dataset):
         
         self.joint_info = pose_group.joint_info
         self.samples = pose_group.samples
+        self.valid_check = args.valid_check
+        self.valid_thresh = args.valid_thresh
 
         self.mean = [0.485, 0.456, 0.406]
         self.dev = [0.229, 0.224, 0.225]
@@ -112,9 +114,14 @@ class TrainSet(data.Dataset):
         image = cameralib.reproject_image(image, sample.camera, camera, (self.side_eingabe, self.side_eingabe))
         image = self.transform(self.occlusion_augment(image)) if self.do_occlude else self.transform(image)
 
-        inv_intrinsics = np.linalg.inv(camera.intrinsic_matrix).astype(np.float32)
+        intrinsics = np.linalg.inv(camera.intrinsic_matrix).astype(np.float32)
 
-        return image, camera_coords, inv_intrinsics
+        if self.valid_check:
+            valid_mask = np.astype(self.valid_thresh <= sample.image_coords[:, 2], np.float32)
+        else:
+            valid_mask = np.ones(sample.image_coords.shape[0], dtype = np.float32)
+            
+        return image, camera_coords, intrinsics, valid_mask
 
     def occlusion_augment(self, image):
         random_value = np.random.uniform()
@@ -143,6 +150,8 @@ class TestSet(data.Dataset):
 
         self.joint_info = pose_group.joint_info
         self.samples = pose_group.samples
+        self.valid_check = args.valid_check
+        self.valid_thresh = args.valid_thresh
 
         self.mean = [0.485, 0.456, 0.406]
         self.dev = [0.229, 0.224, 0.225]
@@ -183,11 +192,16 @@ class TestSet(data.Dataset):
         image = cameralib.reproject_image(image, sample.camera, camera, (self.side_eingabe, self.side_eingabe))
         image = self.transform(image.copy())
 
-        inv_intrinsics = np.linalg.inv(camera.intrinsic_matrix).astype(np.float32)
+        intrinsics = np.linalg.inv(camera.intrinsic_matrix).astype(np.float32)
 
         back_rotation = np.matmul(sample.camera.R, camera.R.T)
 
-        return image, camera_coords, inv_intrinsics, back_rotation
+        if self.valid_check:
+            valid_mask = np.astype(self.valid_thresh <= sample.image_coords[:, 2], np.float32)
+        else:
+            valid_mask = np.ones(sample.image_coords.shape[0], dtype = np.float32)
+
+        return image, camera_coords, intrinsics, back_rotation, valid_mask
 
     def __getitem__(self, index):
         return self.parse_test_sample(self.samples[index])

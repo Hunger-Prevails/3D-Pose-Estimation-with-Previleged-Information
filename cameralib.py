@@ -122,7 +122,7 @@ class Camera:
     def image_to_camera(self, points):
         points = np.expand_dims(np.asarray(points, np.float32), 0)
         new_image_points = cv2.undistortPoints(
-            points, self.intrinsic_matrix, self.distortion_coeffs, None, None, None)[0]
+            points, self.intrinsic_matrix, self.distortion_coeffs, None, None, None)
         return cv2.convertPointsToHomogeneous(new_image_points)[:, 0, :]
 
     @support_single
