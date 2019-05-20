@@ -31,6 +31,17 @@ class JointInfo:
 		self.key_index = key_index
 
 
+def fetch_idx(max_idx, dim_width, dim_depth):
+
+		depth = max_idx % dim_depth
+
+		width = ((max_idx - depth) / dim_depth) % dim_width
+
+		height = (((max_idx - depth) / dim_depth) - width) / dim_width
+
+		return torch.stack((height, width, depth), dim = -1)
+
+
 def to_heatmap(ausgabe, depth, num_joints, height, width, unimodal = False):
 	'''
 	performs axis permutation and numerically stable softmax to output feature map
@@ -49,26 +60,18 @@ def to_heatmap(ausgabe, depth, num_joints, height, width, unimodal = False):
 
 	max_val, max_idx = torch.max(heatmap, dim = 2, keepdim = True)  # (batch_size, num_joints)
 
-	def fetch_idx(max_idx, dim_width, dim_depth):
-
-		depth = max_idx % dim_depth
-
-		width = ((max_idx - depth) / dim_depth) % dim_width
-
-		height = (((max_idx - depth) / dim_depth) - width) / dim_width
-
-		return torch.stack((height, width, depth), dim = -1)
-	
 	if unimodal:
 		heatmap = heatmap.view(-1, num_joints, height, width, depth)
 
-		max_idx = helpers.fetch_idx(max_idx, width, depth)  # (batch_size, num_joints, 3)
+		max_idx = fetch_idx(max_idx, width, depth)  # (batch_size, num_joints, 3)
 		max_idx = max_idx.unsqueeze(2)
 		max_idx = max_idx.unsqueeze(2)
 		max_idx = max_idx.unsqueeze(2)
 
-		mesh_grid = helpers.mesh_grid(heatmap.size())[2:]
-		mesh_grid = torch.stack(mesh_grid, dim = -1).to(max_idx.device)  # (batch_size, num_joints, height, width, depth, 3)
+		dim_ranges = [torch.arange(dim, device = max_idx.device) for dim in heatmap.size()]
+
+		mesh_grid = torch.mesh_grid(*dim_ranges)
+		mesh_grid = torch.stack(mesh_grid[2:], dim = -1)  # (batch_size, num_joints, height, width, depth, 3)
 
 		neighborhood = torch.sum((dist - mesh_grid) ** 2, dim = -1) <= 3  # (batch_size, num_joints, height, width, depth)
 
@@ -97,9 +100,9 @@ def to_coordinate(heatmap, side_eingabe, depth_range, intrinsics, key_depth):
 	heat_x = torch.sum(heatmap, dim = (2, 4))
 	heat_z = torch.sum(heatmap, dim = (2, 3))
 
-	grid_y = torch.linspace(0.0, 1.0, heat_y.size(-1)).view(1, 1, -1).to(heat_y.device)
-	grid_x = torch.linspace(0.0, 1.0, heat_x.size(-1)).view(1, 1, -1).to(heat_x.device)
-	grid_z = torch.linspace(0.0, 2.0, heat_z.size(-1)).view(1, 1, -1).to(heat_z.device)
+	grid_y = torch.linspace(0.0, 1.0, heat_y.size(-1), device = heat_y.device).view(1, 1, -1)
+	grid_x = torch.linspace(0.0, 1.0, heat_x.size(-1), device = heat_x.device).view(1, 1, -1)
+	grid_z = torch.linspace(0.0, 2.0, heat_z.size(-1), device = heat_z.device).view(1, 1, -1)
 
 	height = torch.sum(grid_y * heat_y, dim = 2) * side_eingabe
 	width = torch.sum(grid_x * heat_x, dim = 2) * side_eingabe
@@ -119,9 +122,9 @@ def decode(heatmap, depth_range):
 	heat_x = torch.sum(heatmap, dim = (2, 4))
 	heat_z = torch.sum(heatmap, dim = (2, 3))
 
-	grid_y = torch.linspace(0.0, 2.0, heat_y.size(-1)).view(1, 1, -1).to(heat_y.device)
-	grid_x = torch.linspace(0.0, 2.0, heat_x.size(-1)).view(1, 1, -1).to(heat_x.device)
-	grid_z = torch.linspace(0.0, 2.0, heat_z.size(-1)).view(1, 1, -1).to(heat_z.device)
+	grid_y = torch.linspace(0.0, 2.0, heat_y.size(-1), device = heat_y.device).view(1, 1, -1)
+	grid_x = torch.linspace(0.0, 2.0, heat_x.size(-1), device = heat_x.device).view(1, 1, -1)
+	grid_z = torch.linspace(0.0, 2.0, heat_z.size(-1), device = heat_z.device).view(1, 1, -1)
 
 	coord_y = torch.sum(grid_y * heat_y, dim = 2)
 	coord_x = torch.sum(grid_x * heat_x, dim = 2)

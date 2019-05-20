@@ -54,6 +54,7 @@ class TrainSet(data.Dataset):
         self.chance_occlude = args.chance_occlude
         self.occ_path = args.occluder_path
         self.random_zoom = args.random_zoom
+        self.joint_space = args.joint_space
 
         self.occ_count = torch.load(os.path.join(self.occ_path, 'count.pth'))['count']
         
@@ -120,8 +121,11 @@ class TrainSet(data.Dataset):
             valid_mask = np.astype(self.valid_thresh <= sample.image_coords[:, 2], np.float32)
         else:
             valid_mask = np.ones(sample.image_coords.shape[0], dtype = np.float32)
-            
-        return image, camera_coords, intrinsics, valid_mask
+
+        if self.joint_space:
+            return image, camera_coords, intrinsics, valid_mask, image_coords
+        else:
+            return image, camera_coords, intrinsics, valid_mask
 
     def occlusion_augment(self, image):
         random_value = np.random.uniform()
@@ -147,6 +151,7 @@ class TestSet(data.Dataset):
 
         self.crop_factor = args.crop_factor_test
         self.side_eingabe = args.side_eingabe
+        self.joint_space = args.joint_space
 
         self.joint_info = pose_group.joint_info
         self.samples = pose_group.samples
@@ -201,7 +206,10 @@ class TestSet(data.Dataset):
         else:
             valid_mask = np.ones(sample.image_coords.shape[0], dtype = np.float32)
 
-        return image, camera_coords, intrinsics, back_rotation, valid_mask
+        if self.joint_space:
+            return image, camera_coords, intrinsics, back_rotation, valid_mask, image_coords
+        else:
+            return image, camera_coords, intrinsics, back_rotation, valid_mask
 
     def __getitem__(self, index):
         return self.parse_test_sample(self.samples[index])

@@ -11,9 +11,9 @@ parser.add_argument('-resume', action='store_true', help='Continues from a previ
 parser.add_argument('-flip_test', action='store_true', help='whether to perform flip test')
 parser.add_argument('-do_perturbate', action='store_true', help='whether to perform perturbation augmentation')
 parser.add_argument('-do_occlude', action='store_true', help='whether to perform occlusion augmentation')
-parser.add_argument('-semi_cubic', action='store_true', help='whether to perform semi-cubic heatmap regression')
 parser.add_argument('-valid_check', action='store_true', help='whether to threshold off invalid keypoints')
 parser.add_argument('-unimodal', action='store_true', help='whether to decode the heatmap as unimodal')
+parser.add_argument('-joint_space', action='store_true', help='whether to do allow space train data')
 
 # required options
 parser.add_argument('-model', required=True, help='Backbone architecture')

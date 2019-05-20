@@ -88,11 +88,12 @@ class ResNet(nn.Module):
     def __init__(self, block, layers, args):
         self.inplanes = 64
         super(ResNet, self).__init__()
-        self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3,
-                               bias=False)
+
+        self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False)
         self.bn1 = nn.BatchNorm2d(64)
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+
         self.layer1 = self._make_layer(block, 64, layers[0])
         self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
         self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
@@ -106,7 +107,8 @@ class ResNet(nn.Module):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
 
-        self.regressor = nn.Conv2d(512 * block.expansion, args.depth * args.num_joints, kernel_size = 3, padding = 1)
+        self.cam_regressor = nn.Conv2d(512 * block.expansion, args.depth * args.num_joints, kernel_size = 3, padding = 1)
+        self.image_regressor = nn.Conv2d(512 * block.expansion, args.num_joints, kernel_size = 3, padding = 1) if args.joint_space else None
 
     def _make_layer(self, block, planes, blocks, stride=1, dilation=1):
         downsample = None
@@ -136,7 +138,10 @@ class ResNet(nn.Module):
         x = self.layer3(x)
         x = self.layer4(x)
 
-        return self.regressor(x)
+        if self.image_regressor:
+            return self.cam_regressor(x), self.image_regressor(x)
+        else:
+            return self.cam_regressor(x)
 
 
 def resnet18(args):
