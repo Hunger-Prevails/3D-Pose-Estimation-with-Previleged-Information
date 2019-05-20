@@ -13,6 +13,7 @@ parser.add_argument('-do_perturbate', action='store_true', help='whether to perf
 parser.add_argument('-do_occlude', action='store_true', help='whether to perform occlusion augmentation')
 parser.add_argument('-semi_cubic', action='store_true', help='whether to perform semi-cubic heatmap regression')
 parser.add_argument('-valid_check', action='store_true', help='whether to threshold off invalid keypoints')
+parser.add_argument('-unimodal', action='store_true', help='whether to decode the heatmap as unimodal')
 
 # required options
 parser.add_argument('-model', required=True, help='Backbone architecture')

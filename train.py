@@ -20,6 +20,7 @@ class Trainer:
         self.depth_range = args.depth_range
         self.flip_test = args.flip_test
         self.semi_cubic = args.semi_cubic
+        self.unimodal = args.unimodal
 
         self.learn_rate = args.learn_rate
         self.num_epochs = args.n_epochs
@@ -53,8 +54,11 @@ class Trainer:
             
             if self.nGPU > 0:
                 image = image.to(cuda_device)
+
                 true_coords = true_coords.to(cuda_device)
+
                 intrinsics = intrinsics.to(cuda_device)
+
                 valid_mask = valid_mask.unsqueeze(-1).to(cuda_device)
                 
             batch_size = image.size(0)
@@ -76,15 +80,15 @@ class Trainer:
             if self.semi_cubic:
                 key_depth = true_coords[:, key_index:key_index + 1, 2]
 
-                prediction = utils.to_coordinate(heatmap, self.side_eingabe, self.depth_range, intrinsics, key_depth, cuda_device)
+                prediction = utils.to_coordinate(heatmap, self.side_eingabe, self.depth_range, intrinsics, key_depth)
             else:
-                prediction = utils.decode(heatmap, self.depth_range, cuda_device)
+                prediction = utils.decode(heatmap, self.depth_range)
 
-                prediction -= prediction[:, key_index:key_index + 1]
+                relative = prediction - prediction[:, key_index:key_index + 1]
 
-                true_coords -= true_coords[:, key_index:key_index + 1]
+                true_relative = true_coords - true_coords[:, key_index:key_index + 1]
 
-            loss = self.criterion(prediction * valid_mask, true_coords * valid_mask)
+            loss = self.criterion(relative * valid_mask, true_relative * valid_mask)
 
             self.optimizer.zero_grad()
             loss.backward()
@@ -95,11 +99,11 @@ class Trainer:
             loss_avg += loss.item() * batch_size
             total += batch_size
             
-            print "| Epoch[%d] [%d/%d]  Loss %1.4f" % (epoch, i + 1, n_batches, loss.item())
+            print "| train Epoch[%d] [%d/%d]  Loss %1.4f" % (epoch, i, n_batches, loss.item())
 
         loss_avg /= total
 
-        print "\n=> Epoch[%d]  Loss: %1.4f\n" % (epoch, loss_avg)
+        print "\n=> train Epoch[%d]  Loss: %1.4f\n" % (epoch, loss_avg)
 
         return dict(train_loss = loss_avg)
         
@@ -121,21 +125,24 @@ class Trainer:
             
             if self.nGPU > 0:
                 image = image.to(cuda_device)
+
                 true_coords = true_coords.to(cuda_device)
+
                 intrinsics = intrinsics.to(cuda_device)
-                mask_valid = valid_mask.unsqueeze(-1).cuda()
+
+                mask_valid = valid_mask.unsqueeze(-1).to(cuda_device)
 
             batch_size = image.size(0)
 
             with torch.no_grad():                
                 ausgabe = self.model(image)
 
-                heatmap = utils.to_heatmap(ausgabe, self.depth, self.num_joints, self.side_ausgabe, self.side_ausgabe)
+                heatmap = utils.to_heatmap(ausgabe, self.depth, self.num_joints, self.side_ausgabe, self.side_ausgabe, self.unimodal)
 
                 if self.flip_test:
                     ausgabe_flip = self.model(image[:, :, :, ::-1])
 
-                    heatmap_flip = utils.to_heatmap(ausgabe, self.depth, self.num_joints, self.side_ausgabe, self.side_ausgabe)
+                    heatmap_flip = utils.to_heatmap(ausgabe, self.depth, self.num_joints, self.side_ausgabe, self.side_ausgabe, self.unimodal)
                     heatmap_flip = heatmap_flip[:, self.joint_info.mirror, :, ::-1]
 
                     heatmap = 0.5 * (heatmap + heatmap_flip)
@@ -145,11 +152,11 @@ class Trainer:
                 if self.semi_cubic:
                     key_depth = true_coords[:, key_index:key_index + 1, 2]
 
-                    prediction = utils.to_coordinate(heatmap, self.side_eingabe, self.depth_range, intrinsics, key_depth, cuda_device)
+                    prediction = utils.to_coordinate(heatmap, self.side_eingabe, self.depth_range, intrinsics, key_depth)
 
                     loss = self.criterion(prediction * mask_valid, true_coords * mask_valid)
                 else:
-                    prediction = utils.decode(heatmap, self.depth_range, cuda_device)
+                    prediction = utils.decode(heatmap, self.depth_range)
 
                     relative = prediction - prediction[:, key_index:key_index + 1]
                     
@@ -164,7 +171,7 @@ class Trainer:
                 prediction = prediction.cpu().numpy()
                 true_coords = true_coords.cpu().numpy()
         
-                prediction += true_coords[:, -1:] - prediction[:, -1:]
+                prediction += true_coords[:, key_index:key_index + 1] - prediction[:, key_index:key_index + 1]
             else:
                 relative = relative.cpu().numpy()
                 true_coords = true_coords.cpu().numpy()
@@ -176,14 +183,14 @@ class Trainer:
 
             scores_and_stats.append(self.analyze(prediction, true_coords, valid_mask, self.joint_info.mirror, key_index))
 
-            print "| Epoch[%d] [%d/%d]  Loss %1.4f" % (epoch, i + 1, n_batches, loss.item())
+            print "| test Epoch[%d] [%d/%d]  Loss %1.4f" % (epoch, i, n_batches, loss.item())
 
         loss_avg /= total
 
         summary = dict(test_loss = loss_avg)
         summary.update(utils.parse_epoch(scores_and_stats, total))
 
-        print '\n=> Epoch[%d]  Loss: %1.4f  overall_mean: %1.3f' % (epoch, loss_avg, summary['overall_mean'])
+        print '\n=> test Epoch[%d]  Loss: %1.4f  overall_mean: %1.3f' % (epoch, loss_avg, summary['overall_mean'])
         print 'pck: %1.3f  auc: %1.3f\n' % (summary['score_pck'], summary['score_auc'])
 
         return summary
