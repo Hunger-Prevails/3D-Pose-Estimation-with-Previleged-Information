@@ -5,6 +5,8 @@ python main.py \
 				-shuffle \
 				-save_record \
 				-pretrained \
+				-joint_space \
+				-valid_check \
 				-model resnet50 \
 				-model_path /home/liu/pose_volumetric/models/resnet50.pth \
 				-suffix baseline \

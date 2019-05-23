@@ -1,7 +1,6 @@
 import os
 import torch
 import numpy as np
-import helpers
 
 class PoseSample:
 	
@@ -31,21 +30,9 @@ class JointInfo:
 		self.key_index = key_index
 
 
-def fetch_idx(max_idx, dim_width, dim_depth):
-
-		depth = max_idx % dim_depth
-
-		width = ((max_idx - depth) / dim_depth) % dim_width
-
-		height = (((max_idx - depth) / dim_depth) - width) / dim_width
-
-		return torch.stack((height, width, depth), dim = -1)
-
-
-def to_heatmap(ausgabe, depth, num_joints, height, width, unimodal = False):
+def to_heatmap(ausgabe, depth, num_joints, height, width):
 	'''
 	performs axis permutation and numerically stable softmax to output feature map
-	suppresses non-neighbors of the maximum if unimodal
 
 	args:
 		ausgabe: (batch_size, depth x num_joints, height, width)
@@ -58,60 +45,13 @@ def to_heatmap(ausgabe, depth, num_joints, height, width, unimodal = False):
 	
 	heatmap = heatmap.view(-1, num_joints, height * width * depth)
 
-	max_val, max_idx = torch.max(heatmap, dim = 2, keepdim = True)  # (batch_size, num_joints)
-
-	if unimodal:
-		heatmap = heatmap.view(-1, num_joints, height, width, depth)
-
-		max_idx = fetch_idx(max_idx, width, depth)  # (batch_size, num_joints, 3)
-		max_idx = max_idx.unsqueeze(2)
-		max_idx = max_idx.unsqueeze(2)
-		max_idx = max_idx.unsqueeze(2)
-
-		dim_ranges = [torch.arange(dim, device = max_idx.device) for dim in heatmap.size()]
-
-		mesh_grid = torch.mesh_grid(*dim_ranges)
-		mesh_grid = torch.stack(mesh_grid[2:], dim = -1)  # (batch_size, num_joints, height, width, depth, 3)
-
-		neighborhood = torch.sum((dist - mesh_grid) ** 2, dim = -1) <= 3  # (batch_size, num_joints, height, width, depth)
-
-		heatmap[neighborhood] = 0
-
-		heatmap = heatmap.view(-1, num_joints, height * width * depth)
+	max_val = torch.max(heatmap, dim = 2, keepdim = True)[0]  # (batch_size, num_joints)
 
 	heatmap = torch.exp(heatmap - max_val)
-	heatmap = heatmap / torch.sum(heatmap, dim = 2, keepdim = True)
+
+	heatmap /= torch.sum(heatmap, dim = 2, keepdim = True)
 	
 	return heatmap.view(-1, num_joints, height, width, depth)
-
-
-def to_coordinate(heatmap, side_eingabe, depth_range, intrinsics, key_depth):
-	'''
-	Function:
-		Performs position interpolation over each axis
-		Maps interpolation results over x and y axis to a range of [0, side_eingabe]
-		Maps interpolation results over z axis to a range of [- depth_range, depth_range]
-		Transforms homogeneous 2D coordinates into 3D camera coordinates
-	Args:
-		heatmap: (batch_size, num_joints, height, width, depth)
-		key_depth: (batch_size, 1)
-	'''
-	heat_y = torch.sum(heatmap, dim = (3, 4))
-	heat_x = torch.sum(heatmap, dim = (2, 4))
-	heat_z = torch.sum(heatmap, dim = (2, 3))
-
-	grid_y = torch.linspace(0.0, 1.0, heat_y.size(-1), device = heat_y.device).view(1, 1, -1)
-	grid_x = torch.linspace(0.0, 1.0, heat_x.size(-1), device = heat_x.device).view(1, 1, -1)
-	grid_z = torch.linspace(0.0, 2.0, heat_z.size(-1), device = heat_z.device).view(1, 1, -1)
-
-	height = torch.sum(grid_y * heat_y, dim = 2) * side_eingabe
-	width = torch.sum(grid_x * heat_x, dim = 2) * side_eingabe
-	depth = torch.sum(grid_z * heat_z, dim = 2) * depth_range - depth_range
-
-	extension = torch.ones_like(depth, device = depth.device)
-
-	prediction = torch.einsum('bij,bcj->bci', intrinsics, torch.stack((width, height, extension), dim = -1))  # (batch_size, num_joints, 3)
-	return prediction * (depth + key_depth).unsqueeze(-1)  # (batch_size, num_joints, 3)
 
 
 def decode(heatmap, depth_range):
@@ -172,8 +112,52 @@ def statistics(cubics, reflects, tangents, thresholds):
 def parse_epoch(scores_and_stats, total):
 
 	keys = ('perfect', 'good', 'jitter', 'switch', 'depth', 'fail')
-	keys += ('score_pck', 'score_auc', 'overall_mean', 'batch_size')
+	keys += ('score_pck', 'score_auc', 'cam_mean', 'batch_size')
 
 	values = np.array([[patch[key] for patch in scores_and_stats] for key in keys])
 
 	return dict(zip(keys[:-1], np.sum(values[-1] * values[:-1], axis = 1) / total))
+
+
+def analyze(spec_cam, true_cam, valid_mask, mirror, key_index, thresholds):
+	'''
+	Analyzes spec_cam against true_cam under shifted original camera
+
+	Args:
+		spec_cam: (batch_size, num_joints, 3)
+		true_cam: (batch_size, num_joints, 3)
+		valid_mask: (batch_size, num_joints)
+		mirror: (num_joints,)
+
+	Returns:
+		dict containing batch_size | scores | statistics
+
+	'''
+	spec_cam -= spec_cam[:, key_index:key_index + 1]
+	true_cam -= true_cam[:, key_index:key_index + 1]
+
+	cubics = np.linalg.norm(spec_cam - true_cam, axis = -1)
+	reflects = np.linalg.norm(spec_cam - true_cam[:, mirror], axis = -1)
+	tangents = np.linalg.norm(spec_cam[:, :, :2] - true_cam[:, :, :2], axis = -1)
+
+	valid = np.where(valid_mask.flatten() == 1.0)[0]
+
+	cubics = cubics.flatten()[valid]
+	reflects = reflects.flatten()[valid]
+	tangents = tangents.flatten()[valid]
+
+	cam_mean = np.mean(cubics)
+	score_pck = np.mean(cubics / thresholds['score'] <= 1.0)
+	score_auc = np.mean(np.maximum(0, 1 - cubics / thresholds['score']))
+
+	stats = statistics(cubics, reflects, tangents, thresholds)
+
+	stats.update(
+		dict(
+			batch_size = spec_cam.shape[0],
+			score_pck = score_pck,
+			score_auc = score_auc,
+			cam_mean = cam_mean
+		)
+	)
+	return stats

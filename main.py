@@ -68,6 +68,8 @@ def main():
 
     if args.test_only:
         test_loader, joint_info = get_test_loader(args, 'test')
+    elif args.val_only:
+        test_loader, joint_info = get_test_loader(args, 'validation')
     else:
         train_loader, joint_info = get_train_loader(args)
         val_loader, joint_info = get_test_loader(args, 'validation')
@@ -79,10 +81,11 @@ def main():
     trainer = Trainer(args, model, joint_info)
     print "=> Trainer is ready"
 
-    if args.test_only:
-        test_summary = trainer.test(0, test_loader)
-        print "- Test Model:  pck %6.3f  auc %6.3f  overall_mean %6.3f" % (
-            test_summary['score_pck'], test_summary['score_auc'], test_summary['overall_mean'])
+    if args.test_only or args.val_only:
+        test_rec = trainer.test(0, test_loader)
+        print "- Test Model:  pck: %6.3f  auc: %6.3f  cam_mean: %6.3f" % (test_rec['score_pck'], test_rec['score_auc'], test_rec['cam_mean'])
+        if args.joint_space:
+            print 'mat_mean: %6.3f  oks: %6.3f' % (test_rec['mat_mean'], test_rec['score_oks'])
 
     else:
         start_epoch = logger.state['epoch'] + 1

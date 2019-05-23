@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 import torch.optim as optim
+import mat_utils
 import utils
 
 from torch.autograd import Variable
@@ -19,7 +20,8 @@ class Trainer:
         self.side_ausgabe = args.side_ausgabe
         self.depth_range = args.depth_range
         self.flip_test = args.flip_test
-        self.unimodal = args.unimodal
+        self.joint_space = args.joint_space
+        self.box_margin = args.box_margin
 
         self.learn_rate = args.learn_rate
         self.num_epochs = args.n_epochs
@@ -38,37 +40,82 @@ class Trainer:
             self.criterion = self.criterion.cuda()
 
 
-    def train(self, epoch, train_loader):
+    def joint_train(self, epoch, train_loader, cuda_device):
         n_batches = len(train_loader)
 
         loss_avg = 0
         total = 0
-        
-        self.model.train()
-        self.learning_rate(epoch)
 
-        cuda_device = torch.device('cuda')
+        for i, (image, true_cam, true_mat, valid_mask) in enumerate(train_loader):
 
-        for i, (image, true_cam, intrinsics, valid_mask) in enumerate(train_loader):
-            
             if self.nGPU > 0:
                 image = image.to(cuda_device)
 
                 true_cam = true_cam.to(cuda_device)
 
-                intrinsics = intrinsics.to(cuda_device)
+                true_mat = true_mat.to(cuda_device)
 
                 valid_mask = valid_mask.unsqueeze(-1).to(cuda_device)
-                
-            batch_size = image.size(0)
-            
-            cam_feat = self.model(image)
 
-            heatmap = utils.to_heatmap(cam_feat, self.depth, self.num_joints, self.side_ausgabe, self.side_ausgabe)
+            batch_size = image.size(0)
+
+            cam_feat, mat_feat = self.model(image)
+
+            heat_mat = mat_utils.to_heatmap(mat_feat, self.num_joints, self.side_ausgabe, self.side_ausgabe)
+
+            heat_cam = utils.to_heatmap(cam_feat, self.depth, self.num_joints, self.side_ausgabe, self.side_ausgabe)
+
+            spec_mat = mat_utils.decode(heat_mat, self.side_eingabe)
 
             key_index = self.joint_info.key_index
 
-            spec_cam = utils.decode(heatmap, self.depth_range)
+            spec_cam = utils.decode(heat_cam, self.depth_range)
+
+            relative = spec_cam - spec_cam[:, key_index:key_index + 1]
+
+            true_relative = true_cam - true_cam[:, key_index:key_index + 1]
+
+            loss = self.criterion(relative * valid_mask, true_relative * valid_mask)
+            loss += self.criterion(spec_mat * valid_mask, true_mat * valid_mask)
+
+            self.optimizer.zero_grad()
+            loss.backward()
+
+            nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_norm)
+            self.optimizer.step()
+
+            loss_avg += loss.item() * batch_size
+            total += batch_size
+            
+            print "| train Epoch[%d] [%d/%d]  Loss %1.4f" % (epoch, i, n_batches, loss.item())
+
+        return loss_avg / total
+
+
+    def cam_train(self, epoch, train_loader, cuda_device):
+        n_batches = len(train_loader)
+
+        loss_avg = 0
+        total = 0
+
+        for i, (image, true_cam, valid_mask) in enumerate(train_loader):
+
+            if self.nGPU > 0:
+                image = image.to(cuda_device)
+
+                true_cam = true_cam.to(cuda_device)
+
+                valid_mask = valid_mask.unsqueeze(-1).to(cuda_device)
+
+            batch_size = image.size(0)
+
+            cam_feat = self.model(image)
+
+            heat_cam = utils.to_heatmap(cam_feat, self.depth, self.num_joints, self.side_ausgabe, self.side_ausgabe)
+
+            key_index = self.joint_info.key_index
+
+            spec_cam = utils.decode(heat_cam, self.depth_range)
 
             relative = spec_cam - spec_cam[:, key_index:key_index + 1]
 
@@ -87,55 +134,147 @@ class Trainer:
             
             print "| train Epoch[%d] [%d/%d]  Loss %1.4f" % (epoch, i, n_batches, loss.item())
 
-        loss_avg /= total
+        return loss_avg / total
+
+
+    def train(self, epoch, train_loader):
+        self.model.train()
+        self.adapt_learn_rate(epoch)
+
+        if self.joint_space:
+            loss_avg = self.joint_train(epoch, train_loader, torch.device('cuda'))
+        else:
+            loss_avg = self.cam_train(epoch, train_loader, torch.device('cuda'))
 
         print "\n=> train Epoch[%d]  Loss: %1.4f\n" % (epoch, loss_avg)
 
         return dict(train_loss = loss_avg)
-        
 
-    def test(self, epoch, test_loader):
+
+    def joint_test(self, epoch, test_loader, cuda_device):
         n_batches = len(test_loader)
 
         loss_avg = 0
         total = 0
 
-        self.model.eval()
-        self.learning_rate(epoch)
+        cam_stats = []
+        mat_stats = []
 
-        cuda_device = torch.device('cuda')
+        for i, (image, true_cam, true_mat, back_rotation, valid_mask) in enumerate(test_loader):
 
-        scores_and_stats = []
-
-        for i, (image, true_cam, intrinsics, back_rotation, valid_mask) in enumerate(test_loader):
-            
             if self.nGPU > 0:
                 image = image.to(cuda_device)
 
                 true_cam = true_cam.to(cuda_device)
 
-                intrinsics = intrinsics.to(cuda_device)
+                true_mat = true_mat.to(cuda_device)
 
                 mask_valid = valid_mask.unsqueeze(-1).to(cuda_device)
 
             batch_size = image.size(0)
 
-            with torch.no_grad():                
-                cam_feat = self.model(image)
+            with torch.no_grad():
+                cam_feat, mat_feat = self.model(image)
 
-                heatmap = utils.to_heatmap(cam_feat, self.depth, self.num_joints, self.side_ausgabe, self.side_ausgabe, self.unimodal)
+                heat_mat = mat_utils.to_heatmap(mat_feat, self.num_joints, self.side_ausgabe, self.side_ausgabe)
+
+                heat_cam = utils.to_heatmap(cam_feat, self.depth, self.num_joints, self.side_ausgabe, self.side_ausgabe)
 
                 if self.flip_test:
-                    ausgabe_flip = self.model(image[:, :, :, ::-1])
+                    _cam_feat, _mat_feat = self.model(image[:, :, :, ::-1])
 
-                    heatmap_flip = utils.to_heatmap(cam_feat, self.depth, self.num_joints, self.side_ausgabe, self.side_ausgabe, self.unimodal)
-                    heatmap_flip = heatmap_flip[:, self.joint_info.mirror, :, ::-1]
+                    _heat_mat = mat_utils.to_heatmap(_mat_feat, self.num_joints, self.side_ausgabe, self.side_ausgabe)
 
-                    heatmap = 0.5 * (heatmap + heatmap_flip)
+                    _heat_mat = _heat_mat[:, self.joint_info.mirror, :, ::-1]
+
+                    heat_mat = 0.5 * (heat_mat + _heat_mat)
+
+                    _heat_cam = utils.to_heatmap(_cam_feat, self.depth, self.num_joints, self.side_ausgabe, self.side_ausgabe)
+
+                    _heat_cam = _heat_cam[:, self.joint_info.mirror, :, ::-1]
+
+                    heat_cam = 0.5 * (heat_cam + _heat_cam)
+
+                spec_mat = mat_utils.decode(heat_mat, self.side_eingabe)
 
                 key_index = self.joint_info.key_index
 
-                spec_cam = utils.decode(heatmap, self.depth_range)
+                spec_cam = utils.decode(heat_cam, self.depth_range)
+
+                relative = spec_cam - spec_cam[:, key_index:key_index + 1]
+
+                true_relative = true_cam - true_cam[:, key_index:key_index + 1]
+
+                loss = self.criterion(relative * mask_valid, true_relative * mask_valid)
+                loss += self.criterion(spec_mat * mask_valid, true_mat * mask_valid)
+
+                loss_avg += loss.item() * batch_size
+                total += batch_size
+
+            relative = relative.cpu().numpy()
+            true_cam = true_cam.cpu().numpy()
+
+            spec_cam = relative + true_cam[:, key_index:key_index + 1]
+
+            spec_cam = np.einsum('Bij,BCj->BCi', back_rotation, spec_cam)
+            true_cam = np.einsum('Bij,BCj->BCi', back_rotation, true_cam)
+
+            spec_mat = spec_mat.cpu().numpy()
+            true_mat = true_mat.cpu().numpy()
+
+            cam_stats.append(utils.analyze(spec_cam, true_cam, valid_mask, self.joint_info.mirror, key_index))
+            mat_stats.append(mat_utils.analyze(spec_mat, true_mat, valid_mask, self.box_margin))
+
+            print "| test Epoch[%d] [%d/%d]  Loss %1.4f" % (epoch, i, n_batches, loss.item())
+
+        loss_avg /= total
+
+        summary = dict(test_loss = loss_avg)
+        summary.update(utils.parse_epoch(cam_stats, total))
+        summary.update(mat_utils.parse_epoch(mat_stats, total))
+
+        print '\n=> test Epoch[%d]  Loss: %1.4f  cam_mean: %1.3f' % (epoch, loss_avg, summary['cam_mean'])
+        print 'pck: %1.3f  auc: %1.3f' % (summary['score_pck'], summary['score_auc'])
+        print 'mat_mean: %1.3f  oks: %1.3f\n' % (summary['mat_mean'], summary['score_oks'])
+
+        return summary
+
+
+    def cam_test(self, epoch, test_loader, cuda_device):
+        n_batches = len(test_loader)
+
+        loss_avg = 0
+        total = 0
+
+        cam_stats = []
+
+        for i, (image, true_cam, back_rotation, valid_mask) in enumerate(test_loader):
+
+            if self.nGPU > 0:
+                image = image.to(cuda_device)
+
+                true_cam = true_cam.to(cuda_device)
+
+                mask_valid = valid_mask.unsqueeze(-1).to(cuda_device)
+
+            batch_size = image.size(0)
+
+            with torch.no_grad():
+                cam_feat = self.model(image)
+
+                heat_cam = utils.to_heatmap(cam_feat, self.depth, self.num_joints, self.side_ausgabe, self.side_ausgabe)
+
+                if self.flip_test:
+                    _cam_feat = self.model(image[:, :, :, ::-1])
+
+                    _heat_cam = utils.to_heatmap(_cam_feat, self.depth, self.num_joints, self.side_ausgabe, self.side_ausgabe)
+                    _heat_cam = _heat_cam[:, self.joint_info.mirror, :, ::-1]
+
+                    heat_cam = 0.5 * (heat_cam + _heat_cam)
+
+                key_index = self.joint_info.key_index
+
+                spec_cam = utils.decode(heat_cam, self.depth_range)
 
                 relative = spec_cam - spec_cam[:, key_index:key_index + 1]
                 
@@ -148,70 +287,37 @@ class Trainer:
 
             relative = relative.cpu().numpy()
             true_cam = true_cam.cpu().numpy()
-        
+
             spec_cam = relative + true_cam[:, key_index:key_index + 1]
 
             spec_cam = np.einsum('Bij,BCj->BCi', back_rotation, spec_cam)
             true_cam = np.einsum('Bij,BCj->BCi', back_rotation, true_cam)
 
-            scores_and_stats.append(self.analyze(spec_cam, true_cam, valid_mask, self.joint_info.mirror, key_index))
+            cam_stats.append(utils.analyze(spec_cam, true_cam, valid_mask, self.joint_info.mirror, key_index, self.thresholds))
 
             print "| test Epoch[%d] [%d/%d]  Loss %1.4f" % (epoch, i, n_batches, loss.item())
 
         loss_avg /= total
 
         summary = dict(test_loss = loss_avg)
-        summary.update(utils.parse_epoch(scores_and_stats, total))
+        summary.update(utils.parse_epoch(cam_stats, total))
 
-        print '\n=> test Epoch[%d]  Loss: %1.4f  overall_mean: %1.3f' % (epoch, loss_avg, summary['overall_mean'])
-        print 'pck: %1.3f  auc: %1.3f\n' % (summary['score_pck'], summary['score_auc'])
+        print '\n=> test Epoch[%d]  Loss: %1.4f  cam_mean: %1.3f' % (epoch, loss_avg, summary['cam_mean'])
+        print 'pck: %1.3f  auc: %1.3f' % (summary['score_pck'], summary['score_auc'])
 
         return summary
 
 
-    def analyze(self, spec_cam, true_cam, valid_mask, mirror, key_index):
-        '''
-        Analyzes spec_cam against true_cam under original camera
+    def test(self, epoch, test_loader):
+        self.model.eval()
 
-        Args:
-            spec_cam: (batch_size, num_joints, 3)
-            true_cam: (batch_size, num_joints, 3)
-            valid_mask: (batch_size, num_joints)
-            mirror: (num_joints,)
-
-        Returns:
-            batch_size, scores and statistics
-
-        '''
-        spec_cam -= spec_cam[:, key_index:key_index + 1]
-        true_cam -= true_cam[:, key_index:key_index + 1]
-
-        cubics = np.linalg.norm(spec_cam - true_cam, axis = -1)
-        reflects = np.linalg.norm(spec_cam - true_cam[:, mirror], axis = -1)
-        tangents = np.linalg.norm(spec_cam[:, :, :2] - true_cam[:, :, :2], axis = -1)
-
-        valid = np.where(valid_mask.flatten() == 1.0)[0]
-
-        cubics = cubics.flatten()[valid]
-        reflects = reflects.flatten()[valid]
-        tangents = tangents.flatten()[valid]
-
-        overall_mean = np.mean(cubics)
-        score_pck = np.mean(cubics / self.thresholds['score'] <= 1.0)
-        score_auc = np.mean(np.maximum(0, 1 - cubics / self.thresholds['score']))
-
-        stats = utils.statistics(cubics, reflects, tangents, self.thresholds)
-
-        stats.update(dict(
-                        batch_size = spec_cam.shape[0],
-                        score_pck = score_pck,
-                        score_auc = score_auc,
-                        overall_mean = overall_mean))
-
-        return stats
+        if self.joint_space:
+            return joint_test(epoch, test_loader, torch.device('cuda'))
+        else:
+            return cam_test(epoch, test_loader, torch.device('cuda'))
 
 
-    def learning_rate(self, epoch):
+    def adapt_learn_rate(self, epoch):
         if epoch - 1 < self.num_epochs * 0.6:
             learn_rate = self.learn_rate
         elif epoch - 1 < self.num_epochs * 0.9:

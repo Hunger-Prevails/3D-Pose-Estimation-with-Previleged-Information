@@ -7,10 +7,14 @@ import torch.utils.model_zoo as model_zoo
 __all__ = ['Bottleneck', 'ResNet', 'resnet50', 'resnet101']
 
 
-def conv3x3(in_planes, out_planes, stride=1):
-    "3x3 convolution with padding"
-    return nn.Conv2d(in_planes, out_planes, kernel_size=3, stride=stride,
-                     padding=1, bias=False)
+def conv3x3(in_planes, out_planes, stride = 1):
+    return nn.Conv2d(
+        in_channels = in_planes,
+        out_channels = out_planes,
+        kernel_size = 3,
+        stride = stride,
+        padding = 1,
+        bias = False)
 
 
 class BasicBlock(nn.Module):
@@ -18,11 +22,29 @@ class BasicBlock(nn.Module):
 
     def __init__(self, inplanes, planes, stride=1, dilation=1, downsample=None):
         super(BasicBlock, self).__init__()
-        self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=3, stride=stride, dilation=dilation, padding=dilation, bias=False)
+
+        self.conv1 = nn.Conv2d(
+            in_channels = inplanes,
+            out_channels = planes,
+            kernel_size = 3,
+            stride = stride,
+            dilation = dilation,
+            padding = dilation,
+            bias = False
+        )
         self.bn1 = nn.BatchNorm2d(planes)
+        
         self.relu = nn.ReLU(inplace=True)
-        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, padding=1, bias=False)
+        
+        self.conv2 = nn.Conv2d(
+            in_channels = planes,
+            out_channels = planes,
+            kernel_size = 3,
+            padding = 1,
+            bias = False
+        )
         self.bn2 = nn.BatchNorm2d(planes)
+        
         self.downsample = downsample
         self.stride = stride
 
@@ -50,11 +72,32 @@ class Bottleneck(nn.Module):
 
     def __init__(self, inplanes, planes, stride=1, dilation=1, downsample=None):
         super(Bottleneck, self).__init__()
-        self.conv1 = nn.Conv2d(inplanes, planes, kernel_size=1, bias=False)
+
+        self.conv1 = nn.Conv2d(
+            in_channels = inplanes,
+            out_channels = planes,
+            kernel_size = 1,
+            bias = False
+        )
         self.bn1 = nn.BatchNorm2d(planes)
-        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3, stride=stride, padding=dilation, dilation=dilation, bias=False)
+
+        self.conv2 = nn.Conv2d(
+            in_channels = planes,
+            out_channels = planes,
+            kernel_size = 3,
+            stride = stride,
+            padding = dilation,
+            dilation = dilation,
+            bias = False
+        )
         self.bn2 = nn.BatchNorm2d(planes)
-        self.conv3 = nn.Conv2d(planes, planes * 4, kernel_size=1, bias=False)
+
+        self.conv3 = nn.Conv2d(
+            in_channels = planes,
+            out_channels = planes * 4,
+            kernel_size = 1,
+            bias = False
+        )
         self.bn3 = nn.BatchNorm2d(planes * 4)
         self.relu = nn.ReLU(inplace=True)
         self.downsample = downsample
@@ -89,7 +132,14 @@ class ResNet(nn.Module):
         self.inplanes = 64
         super(ResNet, self).__init__()
 
-        self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        self.conv1 = nn.Conv2d(
+            in_channels = 3,
+            out_channels = 64,
+            kernel_size = 7,
+            stride = 2,
+            padding = 3,
+            bias = False
+        )
         self.bn1 = nn.BatchNorm2d(64)
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
@@ -103,19 +153,35 @@ class ResNet(nn.Module):
             if isinstance(m, nn.Conv2d):
                 n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
                 m.weight.data.normal_(0, math.sqrt(2. / n))
+
             elif isinstance(m, nn.BatchNorm2d):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
 
-        self.cam_regressor = nn.Conv2d(512 * block.expansion, args.depth * args.num_joints, kernel_size = 3, padding = 1)
-        self.image_regressor = nn.Conv2d(512 * block.expansion, args.num_joints, kernel_size = 3, padding = 1) if args.joint_space else None
+        self.cam_regressor = nn.Conv2d(
+            in_channels = 512 * block.expansion,
+            out_channels = args.depth * args.num_joints,
+            kernel_size = 3,
+            padding = 1
+        )
+        self.mat_regressor = nn.Conv2d(
+            in_channels = 512 * block.expansion,
+            out_channels = args.num_joints,
+            kernel_size = 3,
+            padding = 1
+        ) if args.joint_space else None
 
-    def _make_layer(self, block, planes, blocks, stride=1, dilation=1):
+    def _make_layer(self, block, planes, blocks, stride = 1, dilation = 1):
         downsample = None
         if stride != 1 or self.inplanes != planes * block.expansion:
             downsample = nn.Sequential(
-                nn.Conv2d(self.inplanes, planes * block.expansion,
-                          kernel_size=1, stride=stride, bias=False),
+                nn.Conv2d(
+                    in_channels = self.inplanes,
+                    out_channels = planes * block.expansion,
+                    kernel_size = 1,
+                    stride = stride,
+                    bias = False
+                ),
                 nn.BatchNorm2d(planes * block.expansion),
             )
 
@@ -138,8 +204,8 @@ class ResNet(nn.Module):
         x = self.layer3(x)
         x = self.layer4(x)
 
-        if self.image_regressor:
-            return self.cam_regressor(x), self.image_regressor(x)
+        if self.mat_regressor:
+            return self.cam_regressor(x), self.mat_regressor(x)
         else:
             return self.cam_regressor(x)
 

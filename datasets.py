@@ -115,17 +115,15 @@ class TrainSet(data.Dataset):
         image = cameralib.reproject_image(image, sample.camera, camera, (self.side_eingabe, self.side_eingabe))
         image = self.transform(self.occlusion_augment(image)) if self.do_occlude else self.transform(image)
 
-        intrinsics = np.linalg.inv(camera.intrinsic_matrix).astype(np.float32)
-
         if self.valid_check:
             valid_mask = np.astype(self.valid_thresh <= sample.image_coords[:, 2], np.float32)
         else:
             valid_mask = np.ones(sample.image_coords.shape[0], dtype = np.float32)
 
         if self.joint_space:
-            return image, camera_coords, intrinsics, valid_mask, image_coords
+            return image, camera_coords, image_coords, valid_mask
         else:
-            return image, camera_coords, intrinsics, valid_mask
+            return image, camera_coords, valid_mask
 
     def occlusion_augment(self, image):
         random_value = np.random.uniform()
@@ -197,8 +195,6 @@ class TestSet(data.Dataset):
         image = cameralib.reproject_image(image, sample.camera, camera, (self.side_eingabe, self.side_eingabe))
         image = self.transform(image.copy())
 
-        intrinsics = np.linalg.inv(camera.intrinsic_matrix).astype(np.float32)
-
         back_rotation = np.matmul(sample.camera.R, camera.R.T)
 
         if self.valid_check:
@@ -207,9 +203,9 @@ class TestSet(data.Dataset):
             valid_mask = np.ones(sample.image_coords.shape[0], dtype = np.float32)
 
         if self.joint_space:
-            return image, camera_coords, intrinsics, back_rotation, valid_mask, image_coords
+            return image, camera_coords, image_coords, back_rotation, valid_mask
         else:
-            return image, camera_coords, intrinsics, back_rotation, valid_mask
+            return image, camera_coords, back_rotation, valid_mask
 
     def __getitem__(self, index):
         return self.parse_test_sample(self.samples[index])
