@@ -49,7 +49,7 @@ def to_heatmap(ausgabe, depth, num_joints, height, width):
 
 	heatmap = torch.exp(heatmap - max_val)
 
-	heatmap /= torch.sum(heatmap, dim = 2, keepdim = True)
+	heatmap = heatmap / torch.sum(heatmap, dim = 2, keepdim = True)
 	
 	return heatmap.view(-1, num_joints, height, width, depth)
 

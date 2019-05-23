@@ -5,8 +5,7 @@ import numpy as np
 class Logger:
 
     def __init__(self, args, state):
-        self.state = state if state else dict(best_auc = 0, best_pck = 0)
-        self.state['epoch'] = 0
+        self.state = state if state else dict(best_auc = 0, best_oks = 0, best_epoch = 0, epoch = 0)
 
         if not os.path.exists(args.save_path):
             os.mkdir(args.save_path)
@@ -30,9 +29,6 @@ class Logger:
         self.state['epoch'] = epoch
          
         if train_recs:
-            latest = os.path.join(self.save_path, 'latest.pth')
-            torch.save({'latest': epoch}, latest)
-
             model_file = os.path.join(self.save_path, 'model_%d.pth' % epoch);
             
             checkpoint = dict()
@@ -42,12 +38,13 @@ class Logger:
             torch.save(checkpoint, model_file)
 
         if test_recs:
-            score_sum = test_recs['score_pck'] + test_recs['score_auc']
-            best_sum = self.state['best_pck'] + self.state['best_auc']
+            score_sum = test_recs['score_auc'] + test_recs['score_oks']
+            best_sum = self.state['best_auc'] + self.state['best_oks']
 
             if score_sum > best_sum:
-                self.state['best_pck'] = test_recs['score_pck']
                 self.state['best_auc'] = test_recs['score_auc']
+                self.state['best_oks'] = test_recs['score_oks']
+                self.state['best_epoch'] = epoch
                 
                 best = os.path.join(self.save_path, 'best.pth')
                 torch.save({'best': epoch}, best)
@@ -71,4 +68,4 @@ class Logger:
 
 
     def final_print(self):
-        print "- Best Model:  pck %6.3f  auc %6.3f" % (self.state['best_pck'], self.state['best_auc'])
+        print "- Best:  epoch: %3d  auc: %6.3f  oks: %6.3f" % (self.state['best_epoch'], self.state['best_auc'], self.state['best_oks'])

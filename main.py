@@ -92,10 +92,10 @@ def main():
         print "=> Start training"
         
         for epoch in xrange(start_epoch, args.n_epochs + 1):
-            train_summary = trainer.train(epoch, train_loader)
-            val_summary = trainer.test(epoch, val_loader)
+            train_rec = trainer.train(epoch, train_loader)
+            test_rec = trainer.test(epoch, val_loader)
 
-            logger.record(epoch, train_summary, val_summary, model) 
+            logger.record(epoch, train_rec, test_rec, model) 
 
         logger.final_print()
 

@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import math
 import torch.utils.model_zoo as model_zoo
 
@@ -34,8 +35,6 @@ class BasicBlock(nn.Module):
         )
         self.bn1 = nn.BatchNorm2d(planes)
         
-        self.relu = nn.ReLU(inplace=True)
-        
         self.conv2 = nn.Conv2d(
             in_channels = planes,
             out_channels = planes,
@@ -53,7 +52,7 @@ class BasicBlock(nn.Module):
 
         out = self.conv1(x)
         out = self.bn1(out)
-        out = self.relu(out)
+        F.relu_(out)
 
         out = self.conv2(out)
         out = self.bn2(out)
@@ -61,10 +60,7 @@ class BasicBlock(nn.Module):
         if self.downsample is not None:
             residual = self.downsample(x)
 
-        out += residual
-        out = self.relu(out)
-
-        return out
+        return F.relu_(out + residual)
 
 
 class Bottleneck(nn.Module):
@@ -99,7 +95,7 @@ class Bottleneck(nn.Module):
             bias = False
         )
         self.bn3 = nn.BatchNorm2d(planes * 4)
-        self.relu = nn.ReLU(inplace=True)
+
         self.downsample = downsample
         self.stride = stride
 
@@ -108,11 +104,11 @@ class Bottleneck(nn.Module):
 
         out = self.conv1(x)
         out = self.bn1(out)
-        out = self.relu(out)
+        F.relu_(out)
 
         out = self.conv2(out)
         out = self.bn2(out)
-        out = self.relu(out)
+        F.relu_(out)
 
         out = self.conv3(out)
         out = self.bn3(out)
@@ -120,10 +116,7 @@ class Bottleneck(nn.Module):
         if self.downsample is not None:
             residual = self.downsample(x)
 
-        out += residual
-        out = self.relu(out)
-
-        return out
+        return F.relu_(out + residual)
 
 
 class ResNet(nn.Module):
@@ -141,7 +134,6 @@ class ResNet(nn.Module):
             bias = False
         )
         self.bn1 = nn.BatchNorm2d(64)
-        self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
 
         self.layer1 = self._make_layer(block, 64, layers[0])
@@ -196,7 +188,7 @@ class ResNet(nn.Module):
     def forward(self, x):
         x = self.conv1(x)
         x = self.bn1(x)
-        x = self.relu(x)
+        F.relu_(x)
         x = self.maxpool(x)
 
         x = self.layer1(x)

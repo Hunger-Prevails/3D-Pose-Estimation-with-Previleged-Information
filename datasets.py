@@ -116,7 +116,7 @@ class TrainSet(data.Dataset):
         image = self.transform(self.occlusion_augment(image)) if self.do_occlude else self.transform(image)
 
         if self.valid_check:
-            valid_mask = np.astype(self.valid_thresh <= sample.image_coords[:, 2], np.float32)
+            valid_mask = np.float32(self.valid_thresh <= sample.image_coords[:, 2])
         else:
             valid_mask = np.ones(sample.image_coords.shape[0], dtype = np.float32)
 
@@ -198,7 +198,7 @@ class TestSet(data.Dataset):
         back_rotation = np.matmul(sample.camera.R, camera.R.T)
 
         if self.valid_check:
-            valid_mask = np.astype(self.valid_thresh <= sample.image_coords[:, 2], np.float32)
+            valid_mask = np.float32(self.valid_thresh <= sample.image_coords[:, 2])
         else:
             valid_mask = np.ones(sample.image_coords.shape[0], dtype = np.float32)
 

@@ -21,7 +21,6 @@ class Trainer:
         self.depth_range = args.depth_range
         self.flip_test = args.flip_test
         self.joint_space = args.joint_space
-        self.box_margin = args.box_margin
 
         self.learn_rate = args.learn_rate
         self.num_epochs = args.n_epochs
@@ -43,7 +42,8 @@ class Trainer:
     def joint_train(self, epoch, train_loader, cuda_device):
         n_batches = len(train_loader)
 
-        loss_avg = 0
+        cam_loss_avg = 0
+        mat_loss_avg = 0
         total = 0
 
         for i, (image, true_cam, true_mat, valid_mask) in enumerate(train_loader):
@@ -75,8 +75,10 @@ class Trainer:
 
             true_relative = true_cam - true_cam[:, key_index:key_index + 1]
 
-            loss = self.criterion(relative * valid_mask, true_relative * valid_mask)
-            loss += self.criterion(spec_mat * valid_mask, true_mat * valid_mask)
+            cam_loss = self.criterion(relative * valid_mask, true_relative * valid_mask)
+            mat_loss = self.criterion(spec_mat * valid_mask, true_mat * valid_mask)
+
+            loss = cam_loss + mat_loss
 
             self.optimizer.zero_grad()
             loss.backward()
@@ -84,12 +86,18 @@ class Trainer:
             nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_norm)
             self.optimizer.step()
 
-            loss_avg += loss.item() * batch_size
+            cam_loss_avg += cam_loss.item() * batch_size
+            mat_loss_avg += mat_loss.item() * batch_size
             total += batch_size
-            
-            print "| train Epoch[%d] [%d/%d]  Loss %1.4f" % (epoch, i, n_batches, loss.item())
 
-        return loss_avg / total
+            print "| train Epoch[%d] [%d/%d]  Cam Loss: %1.4f  Mat Loss: %1.4f" % (epoch, i, n_batches, cam_loss.item(), mat_loss.item())
+
+        cam_loss_avg /= total
+        mat_loss_avg /= total
+
+        print "\n=> train Epoch[%d]  Cam Loss: %1.4f  Mat Loss: %1.4f\n" % (epoch, cam_loss_avg, mat_loss_avg)
+
+        return dict(cam_train_loss = cam_loss_avg, mat_train_loss = mat_loss_avg)
 
 
     def cam_train(self, epoch, train_loader, cuda_device):
@@ -142,19 +150,16 @@ class Trainer:
         self.adapt_learn_rate(epoch)
 
         if self.joint_space:
-            loss_avg = self.joint_train(epoch, train_loader, torch.device('cuda'))
+            return self.joint_train(epoch, train_loader, torch.device('cuda'))
         else:
-            loss_avg = self.cam_train(epoch, train_loader, torch.device('cuda'))
-
-        print "\n=> train Epoch[%d]  Loss: %1.4f\n" % (epoch, loss_avg)
-
-        return dict(train_loss = loss_avg)
+            return self.cam_train(epoch, train_loader, torch.device('cuda'))
 
 
     def joint_test(self, epoch, test_loader, cuda_device):
         n_batches = len(test_loader)
 
-        loss_avg = 0
+        cam_loss_avg = 0
+        mat_loss_avg = 0
         total = 0
 
         cam_stats = []
@@ -205,10 +210,13 @@ class Trainer:
 
                 true_relative = true_cam - true_cam[:, key_index:key_index + 1]
 
-                loss = self.criterion(relative * mask_valid, true_relative * mask_valid)
-                loss += self.criterion(spec_mat * mask_valid, true_mat * mask_valid)
+                cam_loss = self.criterion(relative * mask_valid, true_relative * mask_valid)
+                mat_loss = self.criterion(spec_mat * mask_valid, true_mat * mask_valid)
 
-                loss_avg += loss.item() * batch_size
+                loss = cam_loss + mat_loss
+
+                cam_loss_avg += cam_loss.item() * batch_size
+                mat_loss_avg += mat_loss.item() * batch_size
                 total += batch_size
 
             relative = relative.cpu().numpy()
@@ -222,22 +230,26 @@ class Trainer:
             spec_mat = spec_mat.cpu().numpy()
             true_mat = true_mat.cpu().numpy()
 
-            cam_stats.append(utils.analyze(spec_cam, true_cam, valid_mask, self.joint_info.mirror, key_index))
-            mat_stats.append(mat_utils.analyze(spec_mat, true_mat, valid_mask, self.box_margin))
+            valid_mask = valid_mask.numpy()
 
-            print "| test Epoch[%d] [%d/%d]  Loss %1.4f" % (epoch, i, n_batches, loss.item())
+            cam_stats.append(utils.analyze(spec_cam, true_cam, valid_mask, self.joint_info.mirror, key_index, self.thresholds))
+            mat_stats.append(mat_utils.analyze(spec_mat, true_mat, valid_mask))
 
-        loss_avg /= total
+            print "| test Epoch[%d] [%d/%d]  Cam Loss: %1.4f  Mat Loss: %1.4f" % (epoch, i, n_batches, cam_loss.item(), mat_loss.item())
 
-        summary = dict(test_loss = loss_avg)
-        summary.update(utils.parse_epoch(cam_stats, total))
-        summary.update(mat_utils.parse_epoch(mat_stats, total))
+        cam_loss_avg /= total
+        mat_loss_avg /= total
 
-        print '\n=> test Epoch[%d]  Loss: %1.4f  cam_mean: %1.3f' % (epoch, loss_avg, summary['cam_mean'])
-        print 'pck: %1.3f  auc: %1.3f' % (summary['score_pck'], summary['score_auc'])
-        print 'mat_mean: %1.3f  oks: %1.3f\n' % (summary['mat_mean'], summary['score_oks'])
+        record = dict(cam_test_loss = cam_loss_avg, mat_test_loss = mat_loss_avg)
 
-        return summary
+        record.update(utils.parse_epoch(cam_stats, total))
+        record.update(mat_utils.parse_epoch(mat_stats, total))
+
+        print '\n=> test Epoch[%d]  Cam Loss: %1.4f  Mat Loss: %1.4f' % (epoch, cam_loss_avg, mat_loss_avg)
+        print 'cam_mean: %1.3f  pck: %1.3f  auc: %1.3f' % (record['cam_mean'], record['score_pck'], record['score_auc'])
+        print 'mat_mean: %1.3f  oks: %1.3f\n' % (record['mat_mean'], record['score_oks'])
+
+        return record
 
 
     def cam_test(self, epoch, test_loader, cuda_device):
@@ -299,22 +311,22 @@ class Trainer:
 
         loss_avg /= total
 
-        summary = dict(test_loss = loss_avg)
-        summary.update(utils.parse_epoch(cam_stats, total))
+        record = dict(test_loss = loss_avg)
+        record.update(utils.parse_epoch(cam_stats, total))
 
-        print '\n=> test Epoch[%d]  Loss: %1.4f  cam_mean: %1.3f' % (epoch, loss_avg, summary['cam_mean'])
-        print 'pck: %1.3f  auc: %1.3f' % (summary['score_pck'], summary['score_auc'])
+        print '\n=> test Epoch[%d]  Loss: %1.4f  cam_mean: %1.3f' % (epoch, loss_avg, record['cam_mean'])
+        print 'pck: %1.3f  auc: %1.3f' % (record['score_pck'], record['score_auc'])
 
-        return summary
+        return record
 
 
     def test(self, epoch, test_loader):
         self.model.eval()
 
         if self.joint_space:
-            return joint_test(epoch, test_loader, torch.device('cuda'))
+            return self.joint_test(epoch, test_loader, torch.device('cuda'))
         else:
-            return cam_test(epoch, test_loader, torch.device('cuda'))
+            return self.cam_test(epoch, test_loader, torch.device('cuda'))
 
 
     def adapt_learn_rate(self, epoch):

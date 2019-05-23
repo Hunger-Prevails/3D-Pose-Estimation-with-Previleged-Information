@@ -28,7 +28,7 @@ parser.add_argument('-criterion', required=True, help='Type of objective functio
 
 # integer options
 parser.add_argument('-n_epochs', default=20, type=int, help='Training epochs')
-parser.add_argument('-batch_size', default=64, type=int, help='Size of mini-batches for each iteration')
+parser.add_argument('-batch_size', default=48, type=int, help='Size of mini-batches for each iteration')
 parser.add_argument('-nGPU', default=2, type=int, help='Number of GPUs for training')
 parser.add_argument('-workers', default=6, type=int, help='Number of subprocesses to to load data')
 parser.add_argument('-num_processes', default=6, type=int, help='Number of subprocesses in the process pool')
