@@ -1,6 +1,7 @@
 import torch
 import numpy as np
 
+
 def to_heatmap(ausgabe, num_joints, height, width):
 
 	heatmap = ausgabe.view(-1, num_joints, height * width)  # (batch_size, num_joints, height x width)
@@ -43,7 +44,7 @@ def coord_to_area(true_mat):
 	return (x_max - x_min) * (y_max - y_min)
 
 
-def analyze(spec_mat, true_mat, valid_mask):
+def analyze(spec_mat, true_mat, valid_mask, side_in):
 	'''
 	Analyzes spec_mat against true_mat under current camera setting
 
@@ -61,7 +62,7 @@ def analyze(spec_mat, true_mat, valid_mask):
 
 	area = coord_to_area(true_mat)  # (batch_size,)
 
-	oks = np.exp(- dist / np.expand_dims(area, axis = -1) / 2)  # (batch_size, num_joints)
+	oks = np.exp(- dist / np.expand_dims(area * 4 / side_in ** 2, axis = -1) / 2)  # (batch_size, num_joints)
 
 	oks = np.sum(oks * valid_mask, axis = -1) / np.sum(valid_mask, axis = -1)  # (batch_size,)
 

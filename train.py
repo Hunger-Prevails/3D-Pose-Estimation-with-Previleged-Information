@@ -16,8 +16,8 @@ class Trainer:
         self.nGPU = args.nGPU
         self.depth = args.depth
         self.num_joints = args.num_joints
-        self.side_eingabe = args.side_eingabe
-        self.side_ausgabe = args.side_ausgabe
+        self.side_in = args.side_in
+        self.stride = args.stride
         self.depth_range = args.depth_range
         self.flip_test = args.flip_test
         self.joint_space = args.joint_space
@@ -46,6 +46,8 @@ class Trainer:
         mat_loss_avg = 0
         total = 0
 
+        side_out = (self.side_in - 1) / self.stride + 1
+
         for i, (image, true_cam, true_mat, valid_mask) in enumerate(train_loader):
 
             if self.nGPU > 0:
@@ -61,11 +63,11 @@ class Trainer:
 
             cam_feat, mat_feat = self.model(image)
 
-            heat_mat = mat_utils.to_heatmap(mat_feat, self.num_joints, self.side_ausgabe, self.side_ausgabe)
+            heat_mat = mat_utils.to_heatmap(mat_feat, self.num_joints, side_out, side_out)
 
-            heat_cam = utils.to_heatmap(cam_feat, self.depth, self.num_joints, self.side_ausgabe, self.side_ausgabe)
+            heat_cam = utils.to_heatmap(cam_feat, self.depth, self.num_joints, side_out, side_out)
 
-            spec_mat = mat_utils.decode(heat_mat, self.side_eingabe)
+            spec_mat = mat_utils.decode(heat_mat, self.side_in)
 
             key_index = self.joint_info.key_index
 
@@ -106,6 +108,8 @@ class Trainer:
         loss_avg = 0
         total = 0
 
+        side_out = (self.side_in - 1) / self.stride + 1
+
         for i, (image, true_cam, valid_mask) in enumerate(train_loader):
 
             if self.nGPU > 0:
@@ -119,7 +123,7 @@ class Trainer:
 
             cam_feat = self.model(image)
 
-            heat_cam = utils.to_heatmap(cam_feat, self.depth, self.num_joints, self.side_ausgabe, self.side_ausgabe)
+            heat_cam = utils.to_heatmap(cam_feat, self.depth, self.num_joints, side_out, side_out)
 
             key_index = self.joint_info.key_index
 
@@ -162,6 +166,8 @@ class Trainer:
         mat_loss_avg = 0
         total = 0
 
+        side_out = (self.side_in - 1) / self.stride + 1
+
         cam_stats = []
         mat_stats = []
 
@@ -181,26 +187,26 @@ class Trainer:
             with torch.no_grad():
                 cam_feat, mat_feat = self.model(image)
 
-                heat_mat = mat_utils.to_heatmap(mat_feat, self.num_joints, self.side_ausgabe, self.side_ausgabe)
+                heat_mat = mat_utils.to_heatmap(mat_feat, self.num_joints, side_out, side_out)
 
-                heat_cam = utils.to_heatmap(cam_feat, self.depth, self.num_joints, self.side_ausgabe, self.side_ausgabe)
+                heat_cam = utils.to_heatmap(cam_feat, self.depth, self.num_joints, side_out, side_out)
 
                 if self.flip_test:
                     _cam_feat, _mat_feat = self.model(image[:, :, :, ::-1])
 
-                    _heat_mat = mat_utils.to_heatmap(_mat_feat, self.num_joints, self.side_ausgabe, self.side_ausgabe)
+                    _heat_mat = mat_utils.to_heatmap(_mat_feat, self.num_joints, side_out, side_out)
 
                     _heat_mat = _heat_mat[:, self.joint_info.mirror, :, ::-1]
 
                     heat_mat = 0.5 * (heat_mat + _heat_mat)
 
-                    _heat_cam = utils.to_heatmap(_cam_feat, self.depth, self.num_joints, self.side_ausgabe, self.side_ausgabe)
+                    _heat_cam = utils.to_heatmap(_cam_feat, self.depth, self.num_joints, side_out, side_out)
 
                     _heat_cam = _heat_cam[:, self.joint_info.mirror, :, ::-1]
 
                     heat_cam = 0.5 * (heat_cam + _heat_cam)
 
-                spec_mat = mat_utils.decode(heat_mat, self.side_eingabe)
+                spec_mat = mat_utils.decode(heat_mat, self.side_in)
 
                 key_index = self.joint_info.key_index
 
@@ -233,7 +239,7 @@ class Trainer:
             valid_mask = valid_mask.numpy()
 
             cam_stats.append(utils.analyze(spec_cam, true_cam, valid_mask, self.joint_info.mirror, key_index, self.thresholds))
-            mat_stats.append(mat_utils.analyze(spec_mat, true_mat, valid_mask))
+            mat_stats.append(mat_utils.analyze(spec_mat, true_mat, valid_mask, self.side_in))
 
             print "| test Epoch[%d] [%d/%d]  Cam Loss: %1.4f  Mat Loss: %1.4f" % (epoch, i, n_batches, cam_loss.item(), mat_loss.item())
 
@@ -258,6 +264,8 @@ class Trainer:
         loss_avg = 0
         total = 0
 
+        side_out = (self.side_in - 1) / self.stride + 1
+
         cam_stats = []
 
         for i, (image, true_cam, back_rotation, valid_mask) in enumerate(test_loader):
@@ -274,12 +282,12 @@ class Trainer:
             with torch.no_grad():
                 cam_feat = self.model(image)
 
-                heat_cam = utils.to_heatmap(cam_feat, self.depth, self.num_joints, self.side_ausgabe, self.side_ausgabe)
+                heat_cam = utils.to_heatmap(cam_feat, self.depth, self.num_joints, side_out, side_out)
 
                 if self.flip_test:
                     _cam_feat = self.model(image[:, :, :, ::-1])
 
-                    _heat_cam = utils.to_heatmap(_cam_feat, self.depth, self.num_joints, self.side_ausgabe, self.side_ausgabe)
+                    _heat_cam = utils.to_heatmap(_cam_feat, self.depth, self.num_joints, side_out, side_out)
                     _heat_cam = _heat_cam[:, self.joint_info.mirror, :, ::-1]
 
                     heat_cam = 0.5 * (heat_cam + _heat_cam)

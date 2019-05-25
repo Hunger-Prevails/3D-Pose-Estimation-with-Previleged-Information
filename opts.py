@@ -32,8 +32,8 @@ parser.add_argument('-batch_size', default=48, type=int, help='Size of mini-batc
 parser.add_argument('-nGPU', default=2, type=int, help='Number of GPUs for training')
 parser.add_argument('-workers', default=6, type=int, help='Number of subprocesses to to load data')
 parser.add_argument('-num_processes', default=6, type=int, help='Number of subprocesses in the process pool')
-parser.add_argument('-side_eingabe', default=256, type=int, help='side of input image')
-parser.add_argument('-side_ausgabe', default=16, type=int, help='side of volumetric heatmap')
+parser.add_argument('-side_in', default=257, type=int, help='side of input image')
+parser.add_argument('-stride', default=16, type=int, help='stride of network for train')
 parser.add_argument('-num_joints', default=19, type=int, help='number of joints in the dataset')
 parser.add_argument('-depth', default=16, type=int, help='depth side of volumetric heatmap')
 

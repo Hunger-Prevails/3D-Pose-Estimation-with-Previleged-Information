@@ -48,7 +48,7 @@ class TrainSet(data.Dataset):
         assert pose_group.phase == 'train'
 
         self.crop_factor = args.crop_factor_train
-        self.side_eingabe = args.side_eingabe
+        self.side_in = args.side_in
         self.do_perturbate = args.do_perturbate
         self.do_occlude = args.do_occlude
         self.chance_occlude = args.chance_occlude
@@ -94,8 +94,8 @@ class TrainSet(data.Dataset):
         box_verge = camera.world_to_image(box_verge)
         side_crop = np.linalg.norm(box_verge[0] - box_verge[1])
 
-        camera.zoom(self.side_eingabe / side_crop * self.crop_factor)
-        camera.center_principal((self.side_eingabe, self.side_eingabe))
+        camera.zoom(self.side_in / side_crop * self.crop_factor)
+        camera.center_principal((self.side_in, self.side_in))
 
         if self.do_perturbate:
             camera.zoom(np.random.uniform(self.random_zoom, self.random_zoom ** (-1)))
@@ -112,7 +112,7 @@ class TrainSet(data.Dataset):
         image_coords = camera.camera_to_image(camera_coords)
 
         image = jpeg4py.JPEG(sample.image_path).decode()
-        image = cameralib.reproject_image(image, sample.camera, camera, (self.side_eingabe, self.side_eingabe))
+        image = cameralib.reproject_image(image, sample.camera, camera, (self.side_in, self.side_in))
         image = self.transform(self.occlusion_augment(image)) if self.do_occlude else self.transform(image)
 
         if self.valid_check:
@@ -148,7 +148,7 @@ class TestSet(data.Dataset):
         assert pose_group.phase != 'train'
 
         self.crop_factor = args.crop_factor_test
-        self.side_eingabe = args.side_eingabe
+        self.side_in = args.side_in
         self.joint_space = args.joint_space
 
         self.joint_info = pose_group.joint_info
@@ -183,8 +183,8 @@ class TestSet(data.Dataset):
         box_verge = camera.world_to_image(box_verge)
         side_crop = np.linalg.norm(box_verge[0] - box_verge[1])
 
-        camera.zoom(self.side_eingabe / side_crop * self.crop_factor)
-        camera.center_principal((self.side_eingabe, self.side_eingabe))
+        camera.zoom(self.side_in / side_crop * self.crop_factor)
+        camera.center_principal((self.side_in, self.side_in))
 
         world_coords = sample.body_pose
 
@@ -192,7 +192,7 @@ class TestSet(data.Dataset):
         image_coords = camera.camera_to_image(camera_coords)
 
         image = jpeg4py.JPEG(sample.image_path).decode()
-        image = cameralib.reproject_image(image, sample.camera, camera, (self.side_eingabe, self.side_eingabe))
+        image = cameralib.reproject_image(image, sample.camera, camera, (self.side_in, self.side_in))
         image = self.transform(image.copy())
 
         back_rotation = np.matmul(sample.camera.R, camera.R.T)

@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import math
+import numpy as np
 import torch.utils.model_zoo as model_zoo
 
 
@@ -122,8 +122,16 @@ class Bottleneck(nn.Module):
 class ResNet(nn.Module):
 
     def __init__(self, block, layers, args):
-        self.inplanes = 64
+        
+    	assert args.stride in [4, 8, 16, 32]
+
         super(ResNet, self).__init__()
+
+        self.inplanes = 64
+        
+        stride2 = int(np.minimum(np.maximum(np.log2(args.stride), 2), 3) - 1)
+        stride3 = int(np.minimum(np.maximum(np.log2(args.stride), 3), 4) - 2)
+        stride4 = int(np.minimum(np.maximum(np.log2(args.stride), 4), 5) - 3)
 
         self.conv1 = nn.Conv2d(
             in_channels = 3,
@@ -137,14 +145,14 @@ class ResNet(nn.Module):
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
 
         self.layer1 = self._make_layer(block, 64, layers[0])
-        self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
-        self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
-        self.layer4 = self._make_layer(block, 512, layers[3], dilation=2)
+        self.layer2 = self._make_layer(block, 128, layers[1], stride = stride2, dilation = 3 - stride2)
+        self.layer3 = self._make_layer(block, 256, layers[2], stride = stride3, dilation = 3 - stride3)
+        self.layer4 = self._make_layer(block, 512, layers[3], stride = stride4, dilation = 3 - stride4)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
                 n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
-                m.weight.data.normal_(0, math.sqrt(2. / n))
+                m.weight.data.normal_(0, (2.0 / n) ** 0.5)
 
             elif isinstance(m, nn.BatchNorm2d):
                 m.weight.data.fill_(1)

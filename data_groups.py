@@ -48,7 +48,7 @@ def make_sample(data_sample, data_params, camera):
 	'''
 
 	image_path, image_coord, bbox, body_pose = data_sample
-	folder_down, side_eingabe, random_zoom = data_params
+	folder_down, side_in, random_zoom = data_params
 
 	try:
 		assert np.all(bbox[:2] >= 0)
@@ -60,7 +60,7 @@ def make_sample(data_sample, data_params, camera):
 
 	box_center = bbox[:2] + bbox[2:] / 2
 
-	scale_factor = min(side_eingabe / np.max(bbox[2:]) / random_zoom, 1.0)
+	scale_factor = min(side_in / np.max(bbox[2:]) / random_zoom, 1.0)
 
 	dest_side = int(np.round(expand_side * scale_factor))
 
@@ -185,7 +185,7 @@ def get_cmu_panoptic_group(phase, args):
 				image_box = coord_to_box(image_coord, args.box_margin)
 
 				data_sample = (image_path, image_coord, image_box, body_pose)
-				data_params = (down_folders[cam_name], args.side_eingabe, args.random_zoom)
+				data_params = (down_folders[cam_name], args.side_in, args.random_zoom)
 
 				processes.append(pool.apply_async(func = make_sample, args = (data_sample, data_params, cameras[cam_name])))
 
