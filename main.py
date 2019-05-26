@@ -71,8 +71,10 @@ def main():
     elif args.val_only:
         test_loader, joint_info = get_test_loader(args, 'validation')
     else:
+        test_loader, joint_info = get_test_loader(args, 'validation')
+
         train_loader, joint_info = get_train_loader(args)
-        val_loader, joint_info = get_test_loader(args, 'validation')
+
     print "=> Dataloaders are ready"
 
     logger = Logger(args, state)
@@ -93,7 +95,7 @@ def main():
         
         for epoch in xrange(start_epoch, args.n_epochs + 1):
             train_rec = trainer.train(epoch, train_loader)
-            test_rec = trainer.test(epoch, val_loader)
+            test_rec = trainer.test(epoch, test_loader)
 
             logger.record(epoch, train_rec, test_rec, model) 
 

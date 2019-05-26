@@ -20,7 +20,7 @@ cmu_panoptic_short_names = [
 	'lEar'
 ]
 
-cmu_panoptic_parents = dict(
+cmu_panoptic_parent = dict(
 	[
 		('Nose', 'Neck'),
 		('lShoulder', 'Neck'),
@@ -43,7 +43,7 @@ cmu_panoptic_parents = dict(
 	]
 )
 
-cmu_panoptic_pairs = dict(
+cmu_panoptic_mirror = dict(
 	[
 		('lShoulder', 'rShoulder'),
 		('rShoulder', 'lShoulder'),
@@ -64,4 +64,4 @@ cmu_panoptic_pairs = dict(
 	]
 )
 
-cmu_panoptic_key_index = 2
+cmu_panoptic_base_joint = 'BodyCenter'

@@ -23,9 +23,9 @@ class PoseGroup:
 
 
 class JointInfo:
-	def __init__(self, short_names, parents, mirror, key_index):
+	def __init__(self, short_names, parent, mirror, key_index):
 		self.short_names = short_names
-		self.parents = parents
+		self.parent = parent
 		self.mirror = mirror
 		self.key_index = key_index
 
