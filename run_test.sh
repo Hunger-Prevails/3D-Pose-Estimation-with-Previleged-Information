@@ -7,7 +7,7 @@ python main.py \
                                 -model resnet50 \
                                 -model_path /home/liu/pose_volumetric/models/resnet50.pth \
                                 -suffix baseline \
-                                -data_source cmu_panoptic \
+                                -data_name cmu_panoptic \
                                 -root_path /globalwork/liu/cmu_panoptic \
                                 -root_down /globalwork/liu/cmu_panoptic_down \
                                 -occluder_path /globalwork/liu/pascal_occluders \

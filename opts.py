@@ -19,9 +19,12 @@ parser.add_argument('-joint_space', action='store_true', help='whether to do all
 parser.add_argument('-model', required=True, help='Backbone architecture')
 parser.add_argument('-model_path', required=True, help='Path to pretrained model')
 parser.add_argument('-suffix', required=True, help='Model suffix')
-parser.add_argument('-data_source', required=True, help='name of dataset')
+parser.add_argument('-data_name', required=True, help='name of dataset')
+parser.add_argument('-comp_name', required=True, help='name of complement dataset')
 parser.add_argument('-root_path', required=True, help='Root path to dataset')
+parser.add_argument('-comp_path', required=True, help='Root path to complement dataset')
 parser.add_argument('-root_down', required=True, help='Root path to downscaled images')
+parser.add_argument('-comp_down', required=True, help='Root path to downscaled complement images')
 parser.add_argument('-occluder_path', required=True, help='Root path to occluders')
 parser.add_argument('-save_path', required=True, help='Path to save train record')
 parser.add_argument('-criterion', required=True, help='Type of objective function')
@@ -46,7 +49,7 @@ parser.add_argument('-box_margin', default=0.8, type=float, help='scale factor f
 
 # evaluation options
 parser.add_argument('-valid_thresh', default=0.1, type=float, help='threshold for valid joints')
-parser.add_argument('-score_thresh', default=15.0, type=float, help='threshold for score analysis')
+parser.add_argument('-score_thresh', default=5.0, type=float, help='threshold for score analysis')
 parser.add_argument('-perfect_thresh', default=1.0, type=float, help='threshold for perfect prediction')
 parser.add_argument('-good_thresh', default=3.0, type=float, help='threshold for good prediction')
 parser.add_argument('-jitter_thresh', default=10.0, type=float, help='threshold for jittered prediction')

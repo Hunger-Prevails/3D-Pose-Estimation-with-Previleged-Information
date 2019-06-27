@@ -15,7 +15,7 @@ class PoseSample:
 class PoseGroup:
 	
 	def __init__(self, phase, joint_info, samples):
-		assert phase in ['train', 'validation', 'test']
+		assert phase in ['train', 'valid', 'test']
 
 		self.phase = phase
 		self.joint_info = joint_info

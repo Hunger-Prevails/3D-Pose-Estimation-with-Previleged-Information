@@ -12,9 +12,6 @@ from utils import PoseSample
 from utils import PoseGroup
 
 
-pose_folder = 'hdPose3d_stage1_coco19'
-
-
 def get_cameras(json_file, cam_names):
 	
 	calibration = json.load(open(json_file))
@@ -125,13 +122,22 @@ def get_cmu_panoptic_group(phase, args):
 	joint_info = JointInfo(short_names, _parent, _mirror, mapper[base_joint])
 
 	sequences = dict(
-		train = ['171204_pose1', '171204_pose2', '171026_pose1', '171026_pose2', '171204_pose4', '171204_pose5', '171204_pose6'],
-		validation = ['171204_pose3'],
-		test = ['171026_pose3']
+		train = [
+			'171204_pose1',
+			'171204_pose2',
+			'171026_pose1',
+			'171026_pose2',
+			'171204_pose4',
+			'171204_pose5',
+			'171204_pose6'],
+		valid = [
+			'171204_pose3'],
+		test = [
+			'171026_pose3']
 	)
 	frame_step = dict(
 		train = 10,
-		validation = 10,
+		valid = 10,
 		test = 50
 	)
 	processes = []

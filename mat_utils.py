@@ -1,5 +1,14 @@
 import torch
 import numpy as np
+import cv2
+
+
+class MatSample:
+
+	def __init__(self, image_path, image_coords, bbox):
+		self.image_path = image_path
+		self.image_coords = image_coords
+		self.bbox = bbox
 
 
 def to_heatmap(ausgabe, num_joints, height, width):
@@ -80,3 +89,24 @@ def parse_epoch(scores, total):
 	values = np.array([[patch[key] for patch in scores] for key in keys])
 
 	return dict(zip(keys[:-1], np.sum(values[-1] * values[:-1], axis = 1) / total))
+
+
+def rotate(center, image, points, max_radian):
+	'''
+	Rotates an image along with the points within it by the given angle around the given center
+
+	Args:
+		angle: the angle by which this rotation is performed
+		center: center around which this rotation is performed
+		image: the image to be rotated
+		points: (num_joints, 2) the points within the image to be rotated
+	'''
+	radian = np.random.uniform(-max_radian, max_radian)
+
+	matrix = cv2.getRotationMatrix2D(center, angle = radian * 180 / np.pi, scale = 1.0)
+
+	dest = cv2.warpAffine(image, maxtrx, image.shape[:2][::-1])
+
+	trans = np.matmul(np.hstack(points, np.ones((points.shape[0], 1))), matrix.T)
+
+	return dest, trans

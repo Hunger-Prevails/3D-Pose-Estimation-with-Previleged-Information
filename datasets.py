@@ -12,37 +12,26 @@ import augmentation
 import torch.utils.data as data
 
 from torch.utils.data import DataLoader
-from torch.utils.data.sampler import Sampler
-from torchvision import datasets, transforms
+from torchvision import datasets
+from torchvision import transforms
 
 
-def get_train_loader(args):
-    data_group = getattr(data_groups, 'get_' + args.data_source + '_group')('train', args)
+def get_data_loader(args, phase):
+    data_group = getattr(data_groups, 'get_' + args.data_name + '_group')(phase, args)
 
-    dataset = TrainSet(data_group, args)
-
-    return DataLoader(
-            dataset,
-            batch_size = args.batch_size,
-            shuffle = args.shuffle,
-            num_workers = args.workers,
-            pin_memory = True), data_group.joint_info
-
-
-def get_test_loader(args, phase):
-    data_group = getattr(data_groups, 'get_' + args.data_source + '_group')(phase, args)
-
-    dataset = TestSet(data_group, args)
+    dataset = Lecture(data_group, args) if phase == 'train' else Exam(data_group, args)
 
     return DataLoader(
             dataset,
             batch_size = args.batch_size,
             shuffle = args.shuffle,
             num_workers = args.workers,
-            pin_memory = True), data_group.joint_info
+            pin_memory = True
+        ), data_group.joint_info
 
 
-class TrainSet(data.Dataset):
+class Lecture(data.Dataset):
+
     def __init__(self, pose_group, args):
 
         assert pose_group.phase == 'train'
@@ -70,7 +59,7 @@ class TrainSet(data.Dataset):
             transforms.ToTensor(),
             transforms.Normalize(mean=self.mean, std=self.dev)])
 
-    def parse_train_sample(self, sample):
+    def parse_sample(self, sample):
 
         center = sample.bbox[:2] + sample.bbox[2:] / 2
         
@@ -118,7 +107,7 @@ class TrainSet(data.Dataset):
         if self.valid_check:
             valid_mask = np.float32(self.valid_thresh <= sample.image_coords[:, 2])
         else:
-            valid_mask = np.ones(sample.image_coords.shape[0], dtype = np.float32)
+            valid_mask = np.float32(sample.image_coords[:, 2] != 0)
 
         if self.joint_space:
             return image, camera_coords, image_coords, valid_mask
@@ -136,13 +125,14 @@ class TrainSet(data.Dataset):
         return augmentation.augment_color(image)
 
     def __getitem__(self, index):
-        return self.parse_train_sample(self.samples[index])
+        return self.parse_sample(self.samples[index])
 
     def __len__(self):
         return len(self.samples)
 
 
-class TestSet(data.Dataset):
+class Exam(data.Dataset):
+
     def __init__(self, pose_group, args):
         
         assert pose_group.phase != 'train'
@@ -163,7 +153,7 @@ class TestSet(data.Dataset):
             transforms.ToTensor(),
             transforms.Normalize(mean=self.mean, std=self.dev)])
 
-    def parse_test_sample(self, sample):
+    def parse_sample(self, sample):
         center = sample.bbox[:2] + sample.bbox[2:] / 2
         
         width = np.array([sample.bbox[2] / 2, 0])
@@ -200,7 +190,7 @@ class TestSet(data.Dataset):
         if self.valid_check:
             valid_mask = np.float32(self.valid_thresh <= sample.image_coords[:, 2])
         else:
-            valid_mask = np.ones(sample.image_coords.shape[0], dtype = np.float32)
+            valid_mask = np.float32(sample.image_coords[:, 2] != 0)
 
         if self.joint_space:
             return image, camera_coords, image_coords, back_rotation, valid_mask
@@ -208,7 +198,7 @@ class TestSet(data.Dataset):
             return image, camera_coords, back_rotation, valid_mask
 
     def __getitem__(self, index):
-        return self.parse_test_sample(self.samples[index])
+        return self.parse_sample(self.samples[index])
 
     def __len__(self):
         return len(self.samples)

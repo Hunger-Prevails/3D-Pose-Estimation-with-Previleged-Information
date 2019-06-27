@@ -67,13 +67,13 @@ def main():
     print "=> Model and criterion are ready"
 
     if args.test_only:
-        test_loader, joint_info = get_test_loader(args, 'test')
+        test_loader, joint_info = get_data_loader(args, 'test')
     elif args.val_only:
-        test_loader, joint_info = get_test_loader(args, 'validation')
+        test_loader, joint_info = get_data_loader(args, 'valid')
     else:
-        test_loader, joint_info = get_test_loader(args, 'validation')
+        test_loader, joint_info = get_data_loader(args, 'valid')
 
-        train_loader, joint_info = get_train_loader(args)
+        train_loader, joint_info = get_data_loader(args, 'train')
 
     print "=> Dataloaders are ready"
 
