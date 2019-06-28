@@ -1,4 +1,4 @@
-cmu_panoptic_short_names = [
+cmu_short_names = [
 	'Neck',
 	'Nose',
 	'BodyCenter',
@@ -19,7 +19,7 @@ cmu_panoptic_short_names = [
 	'rEar',
 	'lEar'
 ]
-cmu_panoptic_parent = dict(
+cmu_parent = dict(
 	[
 		('Nose', 'Neck'),
 		('lShoulder', 'Neck'),
@@ -41,7 +41,7 @@ cmu_panoptic_parent = dict(
 		('rEye', 'Nose')
 	]
 )
-cmu_panoptic_mirror = dict(
+cmu_mirror = dict(
 	[
 		('lShoulder', 'rShoulder'),
 		('rShoulder', 'lShoulder'),
@@ -61,7 +61,7 @@ cmu_panoptic_mirror = dict(
 		('rEye', 'lEye')
 	]
 )
-cmu_panoptic_base_joint = 'BodyCenter'
+cmu_base_joint = 'BodyCenter'
 
 mpii_short_names = [
 	'rAnkle',
@@ -117,3 +117,22 @@ mpii_mirror = dict(
 	]
 )
 mpii_base_joint = 'Thorax'
+
+mpii_cmu_match = dict(
+	[
+		('rAnkle', 'rAnkle'),
+		('rKnee', 'rKnee'),
+		('rHip', 'rHip'),
+		('lHip', 'lHip'),
+		('lKnee', 'lKnee'),
+		('lAnkle', 'lAnkle'),
+		('Pelvis', 'BodyCenter'),
+		('Thorax', 'Neck'),
+		('rWrist', 'rWrist'),
+		('rElbow', 'rElbow'),
+		('rShoulder', 'rShoulder'),
+		('lShoulder', 'lShoulder'),
+		('lElbow', 'lElbow'),
+		('lWrist', 'lWrist')
+	]
+)

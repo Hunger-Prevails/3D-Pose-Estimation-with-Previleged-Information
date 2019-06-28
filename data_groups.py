@@ -99,14 +99,14 @@ def coord_to_box(image_coord, box_margin):
 	return np.hstack([center - shape / box_margin / 2, shape / box_margin])
 
 
-def get_cmu_panoptic_group(phase, args):
+def get_cmu_group(phase, args):
 
-	assert os.path.isdir(args.root_down)
+	assert os.path.isdir(args.data_down_path)
 	
-	from joint_settings import cmu_panoptic_short_names as short_names
-	from joint_settings import cmu_panoptic_parent as parent
-	from joint_settings import cmu_panoptic_mirror as mirror
-	from joint_settings import cmu_panoptic_base_joint as base_joint
+	from joint_settings import cmu_short_names as short_names
+	from joint_settings import cmu_parent as parent
+	from joint_settings import cmu_mirror as mirror
+	from joint_settings import cmu_base_joint as base_joint
 
 	mapper = dict(zip(short_names, range(len(short_names))))
 	
@@ -146,7 +146,7 @@ def get_cmu_panoptic_group(phase, args):
 
 	for sequence in sequences[phase]:
 
-		root_sequence = os.path.join(args.root_path, sequence)
+		root_sequence = os.path.join(args.data_root_path, sequence)
 		root_image = os.path.join(root_sequence, 'hdImgs')
 
 		cam_folders = [os.path.join(root_image, folder) for folder in os.listdir(root_image)]
@@ -158,7 +158,7 @@ def get_cmu_panoptic_group(phase, args):
 		cam_files = [os.path.join(root_image, 'image_coord_' + cam_name + '.json') for cam_name in cam_names]
 		cam_files = [json.load(open(file)) for file in cam_files]
 
-		down_folders = [os.path.join(args.root_down, sequence + '.' + cam_name) for cam_name in cam_names]
+		down_folders = [os.path.join(args.data_down_path, sequence + '.' + cam_name) for cam_name in cam_names]
 
 		start_frame = cam_files[0]['start_frame']
 		end_frame = cam_files[0]['end_frame']

@@ -9,9 +9,9 @@ from torch.autograd import Variable
 
 class Trainer:
 
-    def __init__(self, args, model, joint_info):
+    def __init__(self, args, model, data_info):
         self.model = model
-        self.joint_info = joint_info
+        self.data_info = data_info
 
         self.nGPU = args.nGPU
         self.depth = args.depth
@@ -69,7 +69,7 @@ class Trainer:
 
             spec_mat = mat_utils.decode(heat_mat, self.side_in)
 
-            key_index = self.joint_info.key_index
+            key_index = self.data_info.key_index
 
             spec_cam = utils.decode(heat_cam, self.depth_range)
 
@@ -125,7 +125,7 @@ class Trainer:
 
             heat_cam = utils.to_heatmap(cam_feat, self.depth, self.num_joints, side_out, side_out)
 
-            key_index = self.joint_info.key_index
+            key_index = self.data_info.key_index
 
             spec_cam = utils.decode(heat_cam, self.depth_range)
 
@@ -196,19 +196,19 @@ class Trainer:
 
                     _heat_mat = mat_utils.to_heatmap(_mat_feat, self.num_joints, side_out, side_out)
 
-                    _heat_mat = _heat_mat[:, self.joint_info.mirror, :, ::-1]
+                    _heat_mat = _heat_mat[:, self.data_info.mirror, :, ::-1]
 
                     heat_mat = 0.5 * (heat_mat + _heat_mat)
 
                     _heat_cam = utils.to_heatmap(_cam_feat, self.depth, self.num_joints, side_out, side_out)
 
-                    _heat_cam = _heat_cam[:, self.joint_info.mirror, :, ::-1]
+                    _heat_cam = _heat_cam[:, self.data_info.mirror, :, ::-1]
 
                     heat_cam = 0.5 * (heat_cam + _heat_cam)
 
                 spec_mat = mat_utils.decode(heat_mat, self.side_in)
 
-                key_index = self.joint_info.key_index
+                key_index = self.data_info.key_index
 
                 spec_cam = utils.decode(heat_cam, self.depth_range)
 
@@ -238,7 +238,7 @@ class Trainer:
 
             valid_mask = valid_mask.numpy()
 
-            cam_stats.append(utils.analyze(spec_cam, true_cam, valid_mask, self.joint_info.mirror, key_index, self.thresholds))
+            cam_stats.append(utils.analyze(spec_cam, true_cam, valid_mask, self.data_info.mirror, key_index, self.thresholds))
             mat_stats.append(mat_utils.analyze(spec_mat, true_mat, valid_mask, self.side_in))
 
             print "| test Epoch[%d] [%d/%d]  Cam Loss: %1.4f  Mat Loss: %1.4f" % (epoch, i, n_batches, cam_loss.item(), mat_loss.item())
@@ -288,11 +288,11 @@ class Trainer:
                     _cam_feat = self.model(image[:, :, :, ::-1])
 
                     _heat_cam = utils.to_heatmap(_cam_feat, self.depth, self.num_joints, side_out, side_out)
-                    _heat_cam = _heat_cam[:, self.joint_info.mirror, :, ::-1]
+                    _heat_cam = _heat_cam[:, self.data_info.mirror, :, ::-1]
 
                     heat_cam = 0.5 * (heat_cam + _heat_cam)
 
-                key_index = self.joint_info.key_index
+                key_index = self.data_info.key_index
 
                 spec_cam = utils.decode(heat_cam, self.depth_range)
 
@@ -313,7 +313,7 @@ class Trainer:
             spec_cam = np.einsum('Bij,BCj->BCi', back_rotation, spec_cam)
             true_cam = np.einsum('Bij,BCj->BCi', back_rotation, true_cam)
 
-            cam_stats.append(utils.analyze(spec_cam, true_cam, valid_mask, self.joint_info.mirror, key_index, self.thresholds))
+            cam_stats.append(utils.analyze(spec_cam, true_cam, valid_mask, self.data_info.mirror, key_index, self.thresholds))
 
             print "| test Epoch[%d] [%d/%d]  Loss %1.4f" % (epoch, i, n_batches, loss.item())
 

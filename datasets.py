@@ -32,9 +32,9 @@ def get_data_loader(args, phase):
 
 class Lecture(data.Dataset):
 
-    def __init__(self, pose_group, args):
+    def __init__(self, data_group, args):
 
-        assert pose_group.phase == 'train'
+        assert data_group.phase == 'train'
 
         self.crop_factor = args.crop_factor_train
         self.side_in = args.side_in
@@ -47,8 +47,8 @@ class Lecture(data.Dataset):
 
         self.occ_count = torch.load(os.path.join(self.occ_path, 'count.pth'))['count']
         
-        self.joint_info = pose_group.joint_info
-        self.samples = pose_group.samples
+        self.joint_info = data_group.joint_info
+        self.samples = data_group.samples
         self.valid_check = args.valid_check
         self.valid_thresh = args.valid_thresh
 
@@ -133,16 +133,16 @@ class Lecture(data.Dataset):
 
 class Exam(data.Dataset):
 
-    def __init__(self, pose_group, args):
+    def __init__(self, data_group, args):
         
-        assert pose_group.phase != 'train'
+        assert data_group.phase != 'train'
 
         self.crop_factor = args.crop_factor_test
         self.side_in = args.side_in
         self.joint_space = args.joint_space
 
-        self.joint_info = pose_group.joint_info
-        self.samples = pose_group.samples
+        self.joint_info = data_group.joint_info
+        self.samples = data_group.samples
         self.valid_check = args.valid_check
         self.valid_thresh = args.valid_thresh
 

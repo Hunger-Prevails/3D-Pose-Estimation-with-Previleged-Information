@@ -12,7 +12,7 @@ parser.add_argument('-resume', action='store_true', help='Continues from a previ
 parser.add_argument('-flip_test', action='store_true', help='whether to perform flip test')
 parser.add_argument('-do_perturbate', action='store_true', help='whether to perform perturbation augmentation')
 parser.add_argument('-do_occlude', action='store_true', help='whether to perform occlusion augmentation')
-parser.add_argument('-valid_check', action='store_true', help='whether to threshold off invalid keypoints')
+parser.add_argument('-valid_check', action='store_true', help='whether to threshold uncertain keypoints off')
 parser.add_argument('-joint_space', action='store_true', help='whether to do allow space train data')
 
 # required options
@@ -21,10 +21,10 @@ parser.add_argument('-model_path', required=True, help='Path to pretrained model
 parser.add_argument('-suffix', required=True, help='Model suffix')
 parser.add_argument('-data_name', required=True, help='name of dataset')
 parser.add_argument('-comp_name', required=True, help='name of complement dataset')
-parser.add_argument('-root_path', required=True, help='Root path to dataset')
-parser.add_argument('-comp_path', required=True, help='Root path to complement dataset')
-parser.add_argument('-root_down', required=True, help='Root path to downscaled images')
-parser.add_argument('-comp_down', required=True, help='Root path to downscaled complement images')
+parser.add_argument('-data_root_path', required=True, help='Root path to dataset')
+parser.add_argument('-comp_root_path', required=True, help='Root path to complement dataset')
+parser.add_argument('-data_down_path', required=True, help='Root path to post images of the dataset')
+parser.add_argument('-comp_down_path', required=True, help='Root path to post images of the complement dataset')
 parser.add_argument('-occluder_path', required=True, help='Root path to occluders')
 parser.add_argument('-save_path', required=True, help='Path to save train record')
 parser.add_argument('-criterion', required=True, help='Type of objective function')

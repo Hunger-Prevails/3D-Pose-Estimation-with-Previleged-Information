@@ -67,20 +67,23 @@ def main():
     print "=> Model and criterion are ready"
 
     if args.test_only:
-        test_loader, joint_info = get_data_loader(args, 'test')
+        test_loader, data_info = get_data_loader(args, 'test')
     elif args.val_only:
-        test_loader, joint_info = get_data_loader(args, 'valid')
+        test_loader, data_info = get_data_loader(args, 'valid')
     else:
-        test_loader, joint_info = get_data_loader(args, 'valid')
+        test_loader, data_info = get_data_loader(args, 'valid')
 
-        train_loader, joint_info = get_data_loader(args, 'train')
+        train_loader, data_info = get_data_loader(args, 'train')
+
+        if comp_train:
+            comp_loader, comp_info = get_comp_loader(args, 'train', data_info)
 
     print "=> Dataloaders are ready"
 
     logger = Logger(args, state)
     print "=> Logger is ready"
 
-    trainer = Trainer(args, model, joint_info)
+    trainer = Trainer(args, model, data_info)
     print "=> Trainer is ready"
 
     if args.test_only or args.val_only:
