@@ -4,8 +4,8 @@ import torch.nn as nn
 import torch.backends.cudnn as cudnn
 
 from opts import args
-from datasets import get_train_loader
-from datasets import get_test_loader
+from datasets import get_data_loader
+from comp_datasets import get_comp_loader
 from log import Logger
 from train import Trainer
 
@@ -53,16 +53,15 @@ def create_model(args):
         model.load_state_dict(checkpoint['model'])
         state = checkpoint['state']
 
-    if args.nGPU > 0:
+    if args.n_cudas:
         cudnn.benchmark = True
-        if args.nGPU > 1:
-            model = nn.DataParallel(model, device_ids=[i for i in xrange(args.nGPU)]).cuda()
-        else:
-            model = model.cuda()
+        model = model.cuda() if args.n_cudas == 1 else nn.DataParallel(model, device_ids=[i for i in xrange(args.n_cudas)])
 
     return model, state
 
 def main():
+    assert args.do_complement <= args.joint_space
+
     model, state = create_model(args)
     print "=> Model and criterion are ready"
 
@@ -73,10 +72,9 @@ def main():
     else:
         test_loader, data_info = get_data_loader(args, 'valid')
 
-        train_loader, data_info = get_data_loader(args, 'train')
+        data_loader, data_info = get_data_loader(args, 'train')
 
-        if comp_train:
-            comp_loader, comp_info = get_comp_loader(args, 'train', data_info)
+        comp_loader = get_comp_loader(args, 'train', data_info) if args.do_complement else None
 
     print "=> Dataloaders are ready"
 
@@ -97,7 +95,7 @@ def main():
         print "=> Start training"
         
         for epoch in xrange(start_epoch, args.n_epochs + 1):
-            train_rec = trainer.train(epoch, train_loader)
+            train_rec = trainer.train(epoch, data_loader, comp_loader)
             test_rec = trainer.test(epoch, test_loader)
 
             logger.record(epoch, train_rec, test_rec, model) 

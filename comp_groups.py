@@ -14,7 +14,7 @@ from utils import PoseGroup
 
 def get_mpii_group(phase, args):
 
-	assert os.path.isdir(args.comp_down)
+	assert os.path.isdir(args.comp_down_path)
 	assert phase in ['train', 'valid']
 
 	from joint_settings import mpii_short_names as short_names
@@ -35,7 +35,7 @@ def get_mpii_group(phase, args):
 
 	joint_info = JointInfo(short_names, _parent, _mirror, mapper[base_joint])
 
-	valid_images = os.path.join(args.comp_path, 'valid_images.txt')
+	valid_images = os.path.join(args.comp_root_path, 'valid_images.txt')
 	valid_images = [line for line in open(valid_images)]
 
 	release = json.load(open('mpii_human_pose.json'))
@@ -53,13 +53,13 @@ def get_mpii_group(phase, args):
 
 		print 'collecting annotation [', str(aid) + '/' + str(len(release)), ']'
 		
-		image_path = os.path.join(args.comp_path, 'images', annotation['image'])
+		image_path = os.path.join(args.comp_root_path, 'images', annotation['image'])
 
 		for sing in annotation['singles']:
 
 			sample = annotation['samples'][sing]
 
-			down_path = os.path.join(args.comp_down, str(aid) + '_' + str(sing) + '.jpg')
+			down_path = os.path.join(args.comp_down_path, str(aid) + '_' + str(sing) + '.jpg')
 
 			if sample:
 				data_params = (down_path, args.side_in, args.random_zoom, args.box_margin)

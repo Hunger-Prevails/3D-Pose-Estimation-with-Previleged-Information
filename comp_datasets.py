@@ -3,40 +3,50 @@ import cv2
 import copy
 import jpeg4py
 import numpy as np
-import data_groups
+import comp_groups
 import torch
 import mat_utils
 import augmentation
+import joint_settings
 import torch.utils.data as data
 
 from torch.utils.data import DataLoader
 from torchvision import datasets
 from torchvision import transforms
+from mat_utils import Mapper
 
 
-def get_comp_loader(args, phase):
-    data_group = getattr(comp_groups, 'get_' + args.comp_source + '_group')(phase, args)
+def get_comp_loader(args, phase, dest_info):
+    comp_group = getattr(comp_groups, 'get_' + args.comp_name + '_group')(phase, args)
 
-    dataset = Lecture(data_group, args) if phase == 'train' else Exam(data_group, args)
+    match = getattr(joint_settings, args.comp_name + '_' + args.data_name)
+
+    mapper = Mapper(comp_group.joint_info, dest_info, match)
+
+    dataset = Lecture(comp_group, mapper, args) if phase == 'train' else Exam(comp_group, mapper, args)
 
     return DataLoader(
-            dataset,
-            batch_size = args.batch_size,
-            shuffle = args.shuffle,
-            num_workers = args.workers,
-            pin_memory = True
-        ), data_group.joint_info
+        dataset,
+        batch_size = args.batch_size,
+        shuffle = args.shuffle,
+        num_workers = args.workers,
+        pin_memory = True
+    )
 
 
 class Lecture(data.Dataset):
 
-    def __init__(self, pose_group, args):
+    def __init__(self, data_group, mapper, args):
 
-        self.joint_info = pose_group.joint_info
-        self.samples = pose_group.samples
+        assert data_group.phase == 'train'
+
+        self.joint_info = data_group.joint_info
+        self.samples = data_group.samples
+        self.mapper = mapper
 
         self.random_zoom = args.random_zoom
         self.side_in = args.side_in
+        self.do_perturbate = args.do_perturbate
 
         self.mean = [0.485, 0.456, 0.406]
         self.dev = [0.229, 0.224, 0.225]
@@ -44,6 +54,7 @@ class Lecture(data.Dataset):
         self.transform = transforms.Compose([
             transforms.ToTensor(),
             transforms.Normalize(mean=self.mean, std=self.dev)])
+
 
     def parse_sample(sample):
         image_coords = sample.image_coords
@@ -84,10 +95,14 @@ class Lecture(data.Dataset):
 
         feed_in = cv2.resize(image[roi_begin[1]:roi_end[1], roi_begin[0]:roi_end[0]], (side_in, side_in))
 
+        image_coords = mapper.map_coord(image_coords)
+
         return feed_in, image_coords[:, :2], image_coords[:, 2] != 0
+
 
     def __getitem__(self, index):
         return self.parse_sample(self.samples[index])
+
 
     def __len__(self):
         return len(self.samples)
@@ -95,10 +110,15 @@ class Lecture(data.Dataset):
 
 class Exam(data.Dataset):
 
-    def __init__(self, pose_group, args):
+    def __init__(self, data_group, mapper, args):
 
-        self.joint_info = pose_group.joint_info
-        self.samples = pose_group.samples
+        assert data_group.phase == 'valid'
+
+        self.joint_info = data_group.joint_info
+        self.samples = data_group.samples
+        self.mapper = mapper
+
+        self.side_in = args.side_in
 
         self.mean = [0.485, 0.456, 0.406]
         self.dev = [0.229, 0.224, 0.225]
@@ -106,7 +126,6 @@ class Exam(data.Dataset):
         self.transform = transforms.Compose([
             transforms.ToTensor(),
             transforms.Normalize(mean=self.mean, std=self.dev)])
-
 
 
     def parse_sample(sample):
@@ -129,10 +148,14 @@ class Exam(data.Dataset):
 
         feed_in = cv2.resize(image[roi_begin[1]:roi_end[1], roi_begin[0]:roi_end[0]], (side_in, side_in))
 
+        image_coords = mapper.map_coord(image_coords)
+
         return feed_in, image_coords[:, :2], image_coords[:, 2] != 0
+
 
     def __getitem__(self, index):
         return self.parse_sample(self.samples[index])
+
 
     def __len__(self):
         return len(self.samples)

@@ -3,6 +3,23 @@ import numpy as np
 import cv2
 
 
+class Mapper:
+
+    def __init__(self, curr_info, dest_info, match):
+        curr_mapper = dict(zip(curr_info.short_names, range(len(curr_info.short_names))))
+        dest_mapper = dict(zip(dest_info.short_names, range(len(dest_info.short_names))))
+
+        self.slice_dest = [dest_mapper[match[key]] for key in match]
+        self.slice_curr = [curr_mapper[key] for key in match]
+
+        self.len_dest = len(dest_info.short_names)
+
+    def map_coord(self, curr_coord):
+        dest_coord = np.zeros((self.len_dest, 3))
+        dest_coord[self.slice_dest] = curr_coord[self.slice_curr]
+        return dest_coord
+
+
 class MatSample:
 
 	def __init__(self, image_path, image_coords, bbox):
