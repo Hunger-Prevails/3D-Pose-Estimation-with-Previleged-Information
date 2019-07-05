@@ -2,6 +2,8 @@ import os
 import torch
 import numpy as np
 
+from buildins import zip as xzip
+
 class PoseSample:
 	
 	def __init__(self, image_path, body_pose, image_coords, bbox, camera):
@@ -109,12 +111,12 @@ def statistics(cubics, reflects, tangents, thresholds):
 	return dict(zip(stats, (perfect, good, jitter, switch, depth, dist['cubics'].size / count)))
 
 
-def parse_epoch(scores_and_stats, total):
+def parse_epoch(stats, total):
 
 	keys = ('perfect', 'good', 'jitter', 'switch', 'depth', 'fail')
 	keys += ('score_pck', 'score_auc', 'cam_mean', 'batch_size')
 
-	values = np.array([[patch[key] for patch in scores_and_stats] for key in keys])
+	values = np.array([[patch[key] for patch in stats] for key in keys])
 
 	return dict(zip(keys[:-1], np.sum(values[-1] * values[:-1], axis = 1) / total))
 
@@ -161,3 +163,39 @@ def analyze(spec_cam, true_cam, valid_mask, mirror, key_index, thresholds):
 		)
 	)
 	return stats
+
+
+def get_deter_cam(_spec_mat, _relat_cam, _valid_mask, _intrinsics):
+	'''
+	Reconstructs the reference point location.
+
+	Args:
+		_spec_mat: (batch_size, num_joints, 2) estimated image coordinates
+		_relat_cam: (batch_size, num_joints, 3) estimated relative camera coordinates with respect to an unknown reference point
+		_valid_mask: (batch_size, num_joints)
+		_intrinsics: (batch_size, 3, 3) camera intrinsics
+
+	Returns:
+		(batch_size, num_joints, 3) estimation of camera coordinates
+	'''
+	deter_cams = []
+
+	batch_zip = xzip(_spec_mat, _relat_cam, _valid_mask, _intrinsics)
+
+	for (spec_mat, relat_cam, valid_mask, intrinsics) in batch_zip:
+
+		spec_mat = spec_mat[valid_mask].copy()
+
+		num_valid = spec_mat.shape[0]
+
+		assert num_valid != 0 and num_valid != 1
+
+		normalized = np.matmul(np.hstack(spec_mat, np.ones((num_valid, 1))), np.linalg.inv(intrinsics).T)[:, :2]  # (num_valid, 2)
+
+		A = np.hstack(np.vstack([np.eye(2, 3)] * num_valid), normalized.reshape(-1, 1))  # (num_valid x 2, 3)
+
+		b = (normalized * relat_cam[valid_mask, 2:] - relat_cam[valid_mask, :2]).reshape(-1)  # (num_valid x 2)
+
+		deter_cams.append(relat_cam + np.linalg.solve(np.dot(A.T, A), np.dot(A.T, b)))
+
+	return np.stack(deter_cams)

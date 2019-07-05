@@ -193,7 +193,7 @@ class Exam(data.Dataset):
             valid_mask = np.float32(sample.image_coords[:, 2] != 0)
 
         if self.joint_space:
-            return image, camera_coords, image_coords, back_rotation, valid_mask
+            return image, camera_coords, image_coords, back_rotation, valid_mask, camera.intrinsics
         else:
             return image, camera_coords, back_rotation, valid_mask
 

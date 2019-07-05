@@ -15,6 +15,7 @@ parser.add_argument('-do_occlude', action='store_true', help='whether to perform
 parser.add_argument('-do_complement', action='store_true', help='whether to use complement dataset')
 parser.add_argument('-valid_check', action='store_true', help='whether to threshold uncertain keypoints off')
 parser.add_argument('-joint_space', action='store_true', help='whether to allow joint-space train data')
+parser.add_argument('-do_track', action='store_true', help='whether to track cam coords via least square optim')
 
 # required options
 parser.add_argument('-model', required=True, help='Backbone architecture')
@@ -33,7 +34,7 @@ parser.add_argument('-criterion', required=True, help='Type of objective functio
 # integer options
 parser.add_argument('-n_epochs', default=20, type=int, help='Training epochs')
 parser.add_argument('-batch_size', default=48, type=int, help='Size of mini-batches for each iteration')
-parser.add_argument('-n_cudas', default=2, type=int, help='Number of cuda devices for training')
+parser.add_argument('-n_cudas', default=2, type=int, help='Number of cuda devices available')
 parser.add_argument('-workers', default=6, type=int, help='Number of subprocesses to to load data')
 parser.add_argument('-num_processes', default=6, type=int, help='Number of subprocesses in the process pool')
 parser.add_argument('-side_in', default=257, type=int, help='side of input image')
@@ -42,7 +43,7 @@ parser.add_argument('-num_joints', default=19, type=int, help='number of joints 
 parser.add_argument('-depth', default=16, type=int, help='depth side of volumetric heatmap')
 
 # train options
-parser.add_argument('-learn_rate', default=4e-5, type=float, help='Base learning rate of training')
+parser.add_argument('-learn_rate', default=4e-5, type=float, help='Base learning rate for train')
 parser.add_argument('-grad_norm', default=5.0, type=float, help='norm for gradient clip')
 parser.add_argument('-momentum', default=0.9, type=float, help='Momentum for training')
 parser.add_argument('-weight_decay', default=4e-5, type=float, help='Weight decay for training')

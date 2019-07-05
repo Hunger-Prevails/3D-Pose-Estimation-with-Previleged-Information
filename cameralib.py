@@ -19,7 +19,7 @@ def support_single(f):
 
 class Camera:
     def __init__(
-            self, optical_center, rot_matrix_world_to_cam, intrinsic_matrix, distortion_coeffs, world_up = (0, 0, 1)):
+            self, optical_center, rot_matrix, intrinsic_matrix, distortion_coeffs, world_up = (0, 0, 1)):
         """
         Initializes camera.
 
@@ -33,10 +33,10 @@ class Camera:
 
         Args:
             optical_center: position of the camera in world coordinates (eye point)
-            rot_matrix_world_to_cam: 3x3 rotation matrix for transforming column vectors
+            rot_matrix: 3x3 rotation matrix for transforming column vectors
                 from being expressed in world reference frame to being expressed in camera
                 reference frame as follows:
-                column_point_cam = rot_matrix_world_to_cam @ (column_point_world - optical_center)
+                column_point_cam = rot_matrix @ (column_point_world - optical_center)
             intrinsic_matrix: 3x3 matrix that maps 3D points in camera space to homogeneous
                 coordinates in image (pixel) space. Its last row must be (0,0,1).
             distortion_coeffs: parameters describing radial and tangential lens distortions,
@@ -45,12 +45,12 @@ class Camera:
             world_up: a world vector that is designated as "pointing up", for use when
                 the camera wants to roll itself upright.
         """
-        self.R = np.asarray(rot_matrix_world_to_cam, np.float32)
+        self.R = np.asarray(rot_matrix, np.float32)
         self.t = np.asarray(optical_center.flatten(), np.float32)
 
         # self._extrinsic_matrix = build_extrinsic_matrix(self.R, self.t)
 
-        self.intrinsic_matrix = np.asarray(intrinsic_matrix, np.float32)
+        self.intrinsics = np.asarray(intrinsic_matrix, np.float32)
         if distortion_coeffs is None:
             self.distortion_coeffs = None
         else:
@@ -58,8 +58,8 @@ class Camera:
 
         self.world_up = np.asarray(world_up)
 
-        if not np.allclose(self.intrinsic_matrix[2, :], [0, 0, 1]):
-            raise Exception('Bottom row of intrinsic matrix should be (0,0,1), got ' + str(self.intrinsic_matrix[2, :]) + 'instead.')
+        if not np.allclose(self.intrinsics[2, :], [0, 0, 1]):
+            raise Exception('Bottom row of intrinsic matrix should be (0,0,1), got ' + str(self.intrinsics[2, :]) + 'instead.')
 
     @staticmethod
     def create2D(imshape):
@@ -96,12 +96,12 @@ class Camera:
         else:
             distorted = projected
 
-        return distorted @ self.intrinsic_matrix[:2, :2].T + self.intrinsic_matrix[:2, 2]
+        return distorted @ self.intrinsics[:2, :2].T + self.intrinsics[:2, 2]
         """
 
         zeros = np.zeros(3, np.float32)
         return cv2.projectPoints(
-            np.expand_dims(points, 0), zeros, zeros, self.intrinsic_matrix,
+            np.expand_dims(points, 0), zeros, zeros, self.intrinsics,
             self.distortion_coeffs)[0][:, 0, :]
 
     @support_single
@@ -122,7 +122,7 @@ class Camera:
     def image_to_camera(self, points):
         points = np.expand_dims(np.asarray(points, np.float32), 0)
         new_image_points = cv2.undistortPoints(
-            points, self.intrinsic_matrix, self.distortion_coeffs, None, None, None)
+            points, self.intrinsics, self.distortion_coeffs, None, None, None)
         return cv2.convertPointsToHomogeneous(new_image_points)[:, 0, :]
 
     @support_single
@@ -143,7 +143,7 @@ class Camera:
         Zooms the camera (factor > 1 makes objects look larger)
         while keeping the principal point fixed (scaling anchor is the principal point).
         """
-        self.intrinsic_matrix[:2, :2] *= factor
+        self.intrinsics[:2, :2] *= factor
 
     def scale_output(self, factor):
         """
@@ -152,7 +152,7 @@ class Camera:
         The difference with 'self.zoom' is that this method also moves the principal point,
         multiplying its coordinates by 'factor'.
         """
-        self.intrinsic_matrix[:2] *= factor
+        self.intrinsics[:2] *= factor
 
     def undistort(self):
         self.distortion_coeffs = None
@@ -162,11 +162,11 @@ class Camera:
         Adjusts the intrinsic matrix such that the pixels correspond to squares on the
         image plane.
         """
-        fx = self.intrinsic_matrix[0, 0]
-        fy = self.intrinsic_matrix[1, 1]
+        fx = self.intrinsics[0, 0]
+        fy = self.intrinsics[1, 1]
         fmean = 0.5 * (fx + fy)
         multiplier = np.array([[fmean / fx, 0, 0], [0, fmean / fy, 0], [0, 0, 1]])
-        self.intrinsic_matrix = np.matmul(multiplier, self.intrinsic_matrix)
+        self.intrinsics = np.matmul(multiplier, self.intrinsics)
 
     def horizontal_flip(self):
         self.R[0] *= -1
@@ -176,14 +176,14 @@ class Camera:
         Adjusts the intrinsic matrix so that the principal point becomes located at the center
         of an image sized imshape (height, width)
         """
-        self.intrinsic_matrix[:2, 2] = [imshape[1] / 2, imshape[0] / 2]
+        self.intrinsics[:2, 2] = [imshape[1] / 2, imshape[0] / 2]
 
     def shift_to_center(self, desired_center, imshape):
         """
         Shifts the principal point such that what's currently at 'desired_center'
         will be shown in the image center of an image shaped 'imshape'.
         """
-        self.intrinsic_matrix[:2, 2] -= (
+        self.intrinsics[:2, 2] -= (
                 desired_center - np.float32([imshape[1], imshape[0]]) / 2)
 
     def turn_towards(self, target_image_point=None, target_world_point=None):

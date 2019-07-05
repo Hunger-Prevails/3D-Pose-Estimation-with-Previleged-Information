@@ -32,7 +32,7 @@ def create_model(args):
 
     model = model_creators[args.model](args);
 
-    if args.test_only:
+    if args.test_only or args.val_only:
         save_path = os.path.join(args.save_path, args.model + '-' + args.suffix)
 
         print "=> Loading checkpoint from " + os.path.join(save_path, 'best.pth')
@@ -55,7 +55,7 @@ def create_model(args):
 
     if args.n_cudas:
         cudnn.benchmark = True
-        model = model.cuda() if args.n_cudas == 1 else nn.DataParallel(model, device_ids=[i for i in xrange(args.n_cudas)])
+        model = model.cuda() if args.n_cudas == 1 else nn.DataParallel(model, device_ids = range(args.n_cudas)).cuda()
 
     return model, state
 
@@ -85,10 +85,7 @@ def main():
     print "=> Trainer is ready"
 
     if args.test_only or args.val_only:
-        test_rec = trainer.test(0, test_loader)
-        print "- Test Model:  pck: %6.3f  auc: %6.3f  cam_mean: %6.3f" % (test_rec['score_pck'], test_rec['score_auc'], test_rec['cam_mean'])
-        if args.joint_space:
-            print 'mat_mean: %6.3f  oks: %6.3f' % (test_rec['mat_mean'], test_rec['score_oks'])
+        test_rec = trainer.test(0, test_loader, args.do_track)
 
     else:
         start_epoch = logger.state['epoch'] + 1

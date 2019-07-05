@@ -5,10 +5,11 @@ python main.py \
                                 -shuffle \
                                 -val_only \
 				-valid_check \
+				-joint_space \
                                 -model resnet50 \
                                 -model_path /home/liu/pose_volumetric/models/resnet50.pth \
                                 -suffix baseline \
-                                -data_name cmu_panoptic \
+                                -data_name cmu \
                                 -data_root_path /globalwork/liu/cmu_panoptic \
                                 -data_down_path /globalwork/liu/cmu_panoptic_down \
 				-comp_name mpii \
