@@ -234,7 +234,7 @@ def camera_in_new_world(camera, new_world_camera):
     new_world_up = new_world_camera.world_to_camera(camera.world_up)
     R = np.matmul(camera.R, new_world_camera.R.T)
     t = np.matmul(new_world_camera.R, camera.optical_center - new_world_camera.optical_center)
-    return Camera(t, R, camera.intrinsic_matrix, camera.distortion_coeffs, new_world_up)
+    return Camera(t, R, camera.intrinsics, camera.distortion_coeffs, new_world_up)
 
 
 def reproject_points(points, old_camera, new_camera):
@@ -270,7 +270,7 @@ def reproject_image(
     # 1. Simplest case: if only the intrinsics have changed we can use an affine warp
     if (np.allclose(new_camera.R, old_camera.R) and
             allclose_or_nones(new_camera.distortion_coeffs, old_camera.distortion_coeffs)):
-        relative_intrinsics = np.matmul(old_camera.intrinsic_matrix, np.linalg.inv(new_camera.intrinsic_matrix))
+        relative_intrinsics = np.matmul(old_camera.intrinsics, np.linalg.inv(new_camera.intrinsics))
         return cv2.warpAffine(
             image, relative_intrinsics[:2], output_size, flags=cv2.WARP_INVERSE_MAP)
         # borderMode=border_mode, borderValue=border_value)
@@ -279,8 +279,8 @@ def reproject_image(
     if new_camera.distortion_coeffs is None:
         relative_rotation = np.matmul(new_camera.R, old_camera.R.T)
         map1, map2 = cv2.initUndistortRectifyMap(
-            old_camera.intrinsic_matrix, old_camera.distortion_coeffs, relative_rotation,
-            new_camera.intrinsic_matrix, output_size, cv2.CV_32FC1)
+            old_camera.intrinsics, old_camera.distortion_coeffs, relative_rotation,
+            new_camera.intrinsics, output_size, cv2.CV_32FC1)
         return cv2.remap(
             image, map1, map2, cv2.INTER_LINEAR, borderMode=border_mode, borderValue=border_value)
 

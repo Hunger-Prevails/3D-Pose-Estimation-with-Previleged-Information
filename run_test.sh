@@ -6,9 +6,10 @@ python main.py \
                                 -val_only \
 				-valid_check \
 				-joint_space \
+				-do_track \
                                 -model resnet50 \
                                 -model_path /home/liu/pose_volumetric/models/resnet50.pth \
-                                -suffix baseline \
+                                -suffix small_batch \
                                 -data_name cmu \
                                 -data_root_path /globalwork/liu/cmu_panoptic \
                                 -data_down_path /globalwork/liu/cmu_panoptic_down \

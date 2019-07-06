@@ -25,10 +25,12 @@ def get_comp_loader(args, phase, dest_info):
 
     dataset = Lecture(comp_group, mapper, args) if phase == 'train' else Exam(comp_group, mapper, args)
 
+    shuffle = args.shuffle if phase == 'train' else False
+
     return DataLoader(
         dataset,
         batch_size = args.batch_size,
-        shuffle = args.shuffle,
+        shuffle = shuffle,
         num_workers = args.workers,
         pin_memory = True
     )

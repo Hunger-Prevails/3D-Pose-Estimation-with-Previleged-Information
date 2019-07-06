@@ -21,13 +21,15 @@ def get_data_loader(args, phase):
 
     dataset = Lecture(data_group, args) if phase == 'train' else Exam(data_group, args)
 
+    shuffle = args.shuffle if phase == 'train' else False
+
     return DataLoader(
-            dataset,
-            batch_size = args.batch_size,
-            shuffle = args.shuffle,
-            num_workers = args.workers,
-            pin_memory = True
-        ), data_group.joint_info
+        dataset,
+        batch_size = args.batch_size,
+        shuffle = shuffle,
+        num_workers = args.workers,
+        pin_memory = True
+    ), data_group.joint_info
 
 
 class Lecture(data.Dataset):
@@ -50,7 +52,7 @@ class Lecture(data.Dataset):
         self.joint_info = data_group.joint_info
         self.samples = data_group.samples
         self.valid_check = args.valid_check
-        self.valid_thresh = args.valid_thresh
+        self.thresh_valid = args.thresh_valid
 
         self.mean = [0.485, 0.456, 0.406]
         self.dev = [0.229, 0.224, 0.225]
@@ -105,7 +107,7 @@ class Lecture(data.Dataset):
         image = self.transform(self.occlusion_augment(image)) if self.do_occlude else self.transform(image)
 
         if self.valid_check:
-            valid_mask = np.float32(self.valid_thresh <= sample.image_coords[:, 2])
+            valid_mask = np.float32(self.thresh_valid <= sample.image_coords[:, 2])
         else:
             valid_mask = np.float32(sample.image_coords[:, 2] != 0)
 
@@ -144,7 +146,7 @@ class Exam(data.Dataset):
         self.joint_info = data_group.joint_info
         self.samples = data_group.samples
         self.valid_check = args.valid_check
-        self.valid_thresh = args.valid_thresh
+        self.thresh_valid = args.thresh_valid
 
         self.mean = [0.485, 0.456, 0.406]
         self.dev = [0.229, 0.224, 0.225]
@@ -188,7 +190,7 @@ class Exam(data.Dataset):
         back_rotation = np.matmul(sample.camera.R, camera.R.T)
 
         if self.valid_check:
-            valid_mask = np.float32(self.valid_thresh <= sample.image_coords[:, 2])
+            valid_mask = np.float32(self.thresh_valid <= sample.image_coords[:, 2])
         else:
             valid_mask = np.float32(sample.image_coords[:, 2] != 0)
 

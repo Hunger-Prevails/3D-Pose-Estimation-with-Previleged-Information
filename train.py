@@ -6,6 +6,7 @@ import mat_utils
 import utils
 
 from torch.autograd import Variable
+from builtins import zip as xzip
 
 
 class Trainer:
@@ -40,11 +41,10 @@ class Trainer:
         self.num_epochs = args.n_epochs
         self.grad_norm = args.grad_norm
 
-        self.thresholds = dict(
-            score = args.score_thresh,
-            perfect = args.perfect_thresh,
-            good = args.good_thresh,
-            jitter = args.jitter_thresh
+        self.thresh = dict(
+            solid = args.thresh_solid,
+            close = args.thresh_close,
+            rough = args.thresh_rough
         )
         self.optimizer = optim.Adam(self.get_params(), args.learn_rate, weight_decay = args.weight_decay)
 
@@ -282,23 +282,23 @@ class Trainer:
 
             mat_stats.append(mat_utils.analyze(spec_mat, true_mat, valid_mask, self.side_in))
 
-            spec_cam = relat_cam.cpu().numpy()
+            spec_cam = spec_cam.cpu().numpy()
             true_cam = true_cam.cpu().numpy()
 
             spec_cam = np.einsum('Bij,BCj->BCi', back_rotation, spec_cam)
             true_cam = np.einsum('Bij,BCj->BCi', back_rotation, true_cam)
 
-            cam_stats.append(utils.analyze(spec_cam, true_cam, valid_mask, self.data_info.mirror, key_index, self.thresholds))
+            cam_stats.append(utils.analyze(spec_cam, true_cam, valid_mask, self.data_info.mirror, self.thresh))
 
             if do_track:
 
                 relat_cam = relat_cam.cpu().numpy()
 
-                deter_cam = utils.get_deter_cam(spec_mat, relat_cam, intrinsics)
+                deter_cam = utils.get_deter_cam(spec_mat, relat_cam, valid_mask, intrinsics)
 
                 deter_cam = np.einsum('Bij,BCj->BCi', back_rotation, deter_cam)
 
-                det_stats.append(utils.analyze(deter_cam, true_cam, valid_mask, self.data_info.mirror, key_index, self.thresholds))
+                det_stats.append(utils.analyze(deter_cam, true_cam, valid_mask, self.data_info.mirror, self.thresh))
 
         cam_loss_avg /= total
         mat_loss_avg /= total
@@ -378,7 +378,7 @@ class Trainer:
             spec_cam = np.einsum('Bij,BCj->BCi', back_rotation, spec_cam)
             true_cam = np.einsum('Bij,BCj->BCi', back_rotation, true_cam)
 
-            cam_stats.append(utils.analyze(spec_cam, true_cam, valid_mask, self.data_info.mirror, key_index, self.thresholds))
+            cam_stats.append(utils.analyze(spec_cam, true_cam, valid_mask, self.data_info.mirror, self.thresh))
 
             print "| test Epoch[%d] [%d/%d]  Cam Loss %1.4f" % (epoch, i, n_batches, loss.item())
 

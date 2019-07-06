@@ -2,7 +2,7 @@ import os
 import torch
 import numpy as np
 
-from buildins import zip as xzip
+from builtins import zip as xzip
 
 class PoseSample:
 	
@@ -75,45 +75,42 @@ def decode(heatmap, depth_range):
 	return torch.stack((coord_x, coord_y, coord_z), dim = 2) * depth_range
 
 
-def statistics(cubics, reflects, tangents, thresholds):
+def statistics(original, mirrored, tangential, thresh):
 
 	dist = dict(
-		cubics = cubics,
-		reflects = reflects,
-		tangents = tangents
+		original = original,
+		mirrored = mirrored,
+		tangential = tangential
 	)
-
 	def count_and_eliminate(condition):
 		remains = np.nonzero(np.logical_not(condition))
 
-		dist['cubics'] = dist['cubics'][remains]
-		dist['reflects'] = dist['reflects'][remains]
-		dist['tangents'] = dist['tangents'][remains]
+		dist['original'] = dist['original'][remains]
+		dist['mirrored'] = dist['mirrored'][remains]
+		dist['tangential'] = dist['tangential'][remains]
 
 		return np.count_nonzero(condition)
 
-	count = float(dist['cubics'].size)
+	count = float(dist['original'].size)
 
-	stats = ('perfect', 'good', 'jitter', 'switch', 'depth', 'fail')
+	keys = ('solid', 'close', 'jitter', 'depth', 'switch', 'fail')
 
-	perfect = count_and_eliminate(dist['cubics'] <= thresholds['perfect']) / count
+	solid = count_and_eliminate(dist['original'] <= thresh['solid']) / count
 	
-	good = count_and_eliminate(dist['cubics'] <= thresholds['good']) / count
+	close = count_and_eliminate(dist['original'] <= thresh['close']) / count
 	
-	jitter = count_and_eliminate(dist['cubics'] <= thresholds['jitter']) / count
+	jitter = count_and_eliminate(dist['original'] <= thresh['rough']) / count
 	
-	switch = count_and_eliminate(dist['reflects'] <= thresholds['jitter']) / count
-	
-	depth_condition = (dist['tangents'] <= thresholds['jitter'] * (2 / 3) ** 0.5) & (thresholds['jitter'] < dist['cubics'])
+	depth = count_and_eliminate(dist['tangential'] <= thresh['close']) / count
 
-	depth = count_and_eliminate(depth_condition) / count
+	switch = count_and_eliminate(dist['mirrored'] <= thresh['rough']) / count
 
-	return dict(zip(stats, (perfect, good, jitter, switch, depth, dist['cubics'].size / count)))
+	return dict(zip(keys, (solid, close, jitter, depth, switch, dist['original'].size / count)))
 
 
 def parse_epoch(stats, total):
 
-	keys = ('perfect', 'good', 'jitter', 'switch', 'depth', 'fail')
+	keys = ('solid', 'close', 'jitter', 'depth', 'switch', 'fail')
 	keys += ('score_pck', 'score_auc', 'cam_mean', 'batch_size')
 
 	values = np.array([[patch[key] for patch in stats] for key in keys])
@@ -121,7 +118,7 @@ def parse_epoch(stats, total):
 	return dict(zip(keys[:-1], np.sum(values[-1] * values[:-1], axis = 1) / total))
 
 
-def analyze(spec_cam, true_cam, valid_mask, mirror, key_index, thresholds):
+def analyze(spec_cam, true_cam, valid_mask, mirror, thresh):
 	'''
 	Analyzes spec_cam against true_cam under shifted original camera
 
@@ -135,24 +132,21 @@ def analyze(spec_cam, true_cam, valid_mask, mirror, key_index, thresholds):
 		dict containing batch_size | scores | statistics
 
 	'''
-	spec_cam -= spec_cam[:, key_index:key_index + 1]
-	true_cam -= true_cam[:, key_index:key_index + 1]
+	original = np.linalg.norm(spec_cam - true_cam, axis = -1)
+	mirrored = np.linalg.norm(spec_cam - true_cam[:, mirror], axis = -1)
+	tangential = np.linalg.norm(spec_cam[:, :, :2] - true_cam[:, :, :2], axis = -1)
 
-	cubics = np.linalg.norm(spec_cam - true_cam, axis = -1)
-	reflects = np.linalg.norm(spec_cam - true_cam[:, mirror], axis = -1)
-	tangents = np.linalg.norm(spec_cam[:, :, :2] - true_cam[:, :, :2], axis = -1)
+	valid = np.where(valid_mask.flatten() == 1.0)
 
-	valid = np.where(valid_mask.flatten() == 1.0)[0]
+	original = original.flatten()[valid]
+	mirrored = mirrored.flatten()[valid]
+	tangential = tangential.flatten()[valid]
 
-	cubics = cubics.flatten()[valid]
-	reflects = reflects.flatten()[valid]
-	tangents = tangents.flatten()[valid]
+	cam_mean = np.mean(original)
+	score_pck = np.mean(original / thresh['rough'] <= 1.0)
+	score_auc = np.mean(np.maximum(0, 1 - original / thresh['rough']))
 
-	cam_mean = np.mean(cubics)
-	score_pck = np.mean(cubics / thresholds['score'] <= 1.0)
-	score_auc = np.mean(np.maximum(0, 1 - cubics / thresholds['score']))
-
-	stats = statistics(cubics, reflects, tangents, thresholds)
+	stats = statistics(original, mirrored, tangential, thresh)
 
 	stats.update(
 		dict(
@@ -163,6 +157,10 @@ def analyze(spec_cam, true_cam, valid_mask, mirror, key_index, thresholds):
 		)
 	)
 	return stats
+
+
+def least_square(A, b):
+	return np.linalg.solve(np.dot(A.T, A), np.dot(A.T, b))
 
 
 def get_deter_cam(_spec_mat, _relat_cam, _valid_mask, _intrinsics):
@@ -184,18 +182,21 @@ def get_deter_cam(_spec_mat, _relat_cam, _valid_mask, _intrinsics):
 
 	for (spec_mat, relat_cam, valid_mask, intrinsics) in batch_zip:
 
-		spec_mat = spec_mat[valid_mask].copy()
+		valid = np.where(valid_mask == 1.0)
+
+		spec_mat = spec_mat[valid].copy()
 
 		num_valid = spec_mat.shape[0]
 
 		assert num_valid != 0 and num_valid != 1
 
-		normalized = np.matmul(np.hstack(spec_mat, np.ones((num_valid, 1))), np.linalg.inv(intrinsics).T)[:, :2]  # (num_valid, 2)
+		normalized = np.hstack([spec_mat, np.ones((num_valid, 1))])
+		normalized = np.matmul(normalized, np.linalg.inv(intrinsics).T)[:, :2]
 
-		A = np.hstack(np.vstack([np.eye(2, 3)] * num_valid), normalized.reshape(-1, 1))  # (num_valid x 2, 3)
+		A = np.hstack([np.vstack([np.eye(2, 2)] * num_valid), - normalized.reshape(-1, 1)])  # (num_valid x 2, 3)
 
-		b = (normalized * relat_cam[valid_mask, 2:] - relat_cam[valid_mask, :2]).reshape(-1)  # (num_valid x 2)
+		b = (normalized * relat_cam[valid, 2:] - relat_cam[valid, :2]).reshape(-1)  # (num_valid x 2)
 
-		deter_cams.append(relat_cam + np.linalg.solve(np.dot(A.T, A), np.dot(A.T, b)))
+		deter_cams.append(relat_cam + least_square(A, b))
 
 	return np.stack(deter_cams)

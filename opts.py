@@ -49,14 +49,13 @@ parser.add_argument('-momentum', default=0.9, type=float, help='Momentum for tra
 parser.add_argument('-weight_decay', default=4e-5, type=float, help='Weight decay for training')
 parser.add_argument('-box_margin', default=0.8, type=float, help='scale factor for pseudo bbox')
 parser.add_argument('-comp_loss_weight', default=0.2, type=float, help='loss weight for complement train samples')
+parser.add_argument('-depth_range', default=100.0, type=float, help='depth range of prediction')
 
 # evaluation options
-parser.add_argument('-valid_thresh', default=0.1, type=float, help='threshold for valid joints')
-parser.add_argument('-score_thresh', default=5.0, type=float, help='threshold for score analysis')
-parser.add_argument('-perfect_thresh', default=1.0, type=float, help='threshold for perfect prediction')
-parser.add_argument('-good_thresh', default=3.0, type=float, help='threshold for good prediction')
-parser.add_argument('-jitter_thresh', default=10.0, type=float, help='threshold for jittered prediction')
-parser.add_argument('-depth_range', default=100.0, type=float, help='depth range of prediction')
+parser.add_argument('-thresh_valid', default=0.1, type=float, help='threshold for a confident annotation')
+parser.add_argument('-thresh_solid', default=0.5, type=float, help='threshold for a solid estimation')
+parser.add_argument('-thresh_close', default=2.0, type=float, help='threshold for a close estimation')
+parser.add_argument('-thresh_rough', default=5.0, type=float, help='threshold for a rough estimation')
 
 # augmentation options
 parser.add_argument('-crop_factor_train', default=1.0, type=float, help='crop factor for train')
