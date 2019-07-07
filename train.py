@@ -143,7 +143,8 @@ class Trainer:
         cam_loss_avg /= total
         mat_loss_avg /= total
 
-        print "\n=> train Epoch[%d]  Cam Loss: %1.4f  Mat Loss: %1.4f\n" % (epoch, cam_loss_avg, mat_loss_avg)
+        print ''
+        print '=> train Epoch[%d]  Cam Loss: %1.4f  Mat Loss: %1.4f\n' % (epoch, cam_loss_avg, mat_loss_avg)
 
         return dict(cam_train_loss = cam_loss_avg, mat_train_loss = mat_loss_avg)
 
@@ -192,7 +193,12 @@ class Trainer:
             
             print "| train Epoch[%d] [%d/%d]  Loss %1.4f" % (epoch, i, n_batches, loss.item())
 
-        return loss_avg / total
+        loss_avg /= total
+
+        print ''
+        print '=> train Epoch[%d]  Cam Loss: %1.4f\n' % (epoch, loss_avg)
+
+        return dict(cam_train_loss = loss_avg)
 
 
     def train(self, epoch, data_loader, comp_loader):
@@ -294,7 +300,7 @@ class Trainer:
 
                 relat_cam = relat_cam.cpu().numpy()
 
-                deter_cam = utils.get_deter_cam(spec_mat, relat_cam, valid_mask, intrinsics)
+                deter_cam = utils.get_deter_cam(spec_mat, relat_cam, valid_mask, intrinsics, self.data_info.weight)
 
                 deter_cam = np.einsum('Bij,BCj->BCi', back_rotation, deter_cam)
 
@@ -308,17 +314,18 @@ class Trainer:
         record.update(mat_utils.parse_epoch(mat_stats, total))
         record.update(utils.parse_epoch(cam_stats, total))
 
-        print '\n=> test Epoch[%d]  Cam Loss: %1.4f  Mat Loss: %1.4f' % (epoch, cam_loss_avg, mat_loss_avg)
+        print ''
+        print '=> test Epoch[%d]  Cam Loss: %1.4f  Mat Loss: %1.4f\n' % (epoch, cam_loss_avg, mat_loss_avg)
 
-        print 'cam_mean: %1.3f  [pck]: %1.3f  [auc]: %1.3f' % (record['cam_mean'], record['score_pck'], record['score_auc'])
+        print '=>mat_mean: %1.3f  [oks]: %1.3f\n' % (record['mat_mean'], record['score_oks'])
 
-        print 'mat_mean: %1.3f  [oks]: %1.3f\n' % (record['mat_mean'], record['score_oks'])
+        print '=>[SPEC] cam_mean: %1.3f  [pck]: %1.3f  [auc]: %1.3f\n' % (record['cam_mean'], record['score_pck'], record['score_auc'])
 
         if do_track:
 
             track_rec = utils.parse_epoch(det_stats, total)
 
-            print 'cam_mean: %1.3f  [pck]: %1.3f  [auc]: %1.3f' % (track_rec['cam_mean'], track_rec['score_pck'], track_rec['score_auc'])
+            print '=>[DETER] cam_mean: %1.3f  [pck]: %1.3f  [auc]: %1.3f\n' % (track_rec['cam_mean'], track_rec['score_pck'], track_rec['score_auc'])
 
         return record
 
@@ -387,8 +394,10 @@ class Trainer:
         record = dict(test_loss = loss_avg)
         record.update(utils.parse_epoch(cam_stats, total))
 
-        print '\n=> test Epoch[%d]  Loss: %1.4f  cam_mean: %1.3f' % (epoch, loss_avg, record['cam_mean'])
-        print '[pck]: %1.3f  [auc]: %1.3f' % (record['score_pck'], record['score_auc'])
+        print ''
+        print '=> test Epoch[%d]  Cam Loss: %1.4f\n' % (epoch, loss_avg)
+
+        print '=>[SPEC] cam_mean: %1.3f  [pck]: %1.3f  [auc]: %1.3f\n' % (record['cam_mean'], record['score_pck'], record['score_auc'])
 
         return record
 

@@ -42,9 +42,17 @@ def create_model(args):
         best = best['best'];
         
         checkpoint = os.path.join(save_path, 'model_%d.pth' % best)
-        checkpoint = torch.load(checkpoint)
+        checkpoint = torch.load(checkpoint)['model']
+
+        keys = checkpoint.keys()
+        model_dict = model.state_dict()
+
+        for key in keys:
+            if key not in model_dict:
+                print key
+                del checkpoint[key]
         
-        model.load_state_dict(checkpoint['model'])
+        model.load_state_dict(checkpoint)
 
     if args.resume:
         print "=> Loading checkpoint from " + args.model_path

@@ -107,6 +107,7 @@ def get_cmu_group(phase, args):
 	from joint_settings import cmu_parent as parent
 	from joint_settings import cmu_mirror as mirror
 	from joint_settings import cmu_base_joint as base_joint
+	from joint_settings import cmu_weight as weight
 
 	mapper = dict(zip(short_names, range(len(short_names))))
 	
@@ -119,7 +120,7 @@ def get_cmu_group(phase, args):
 	_mirror[np.array([name in mirror for name in short_names])] = np.array(map_mirror)
 	_parent[np.array([name in parent for name in short_names])] = np.array(map_parent)
 
-	joint_info = JointInfo(short_names, _parent, _mirror, mapper[base_joint])
+	joint_info = JointInfo(short_names, _parent, _mirror, mapper[base_joint], np.array(weight))
 
 	sequences = dict(
 		train = [

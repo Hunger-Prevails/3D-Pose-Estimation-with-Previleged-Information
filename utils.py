@@ -25,11 +25,12 @@ class PoseGroup:
 
 
 class JointInfo:
-	def __init__(self, short_names, parent, mirror, key_index):
+	def __init__(self, short_names, parent, mirror, key_index, weight = None):
 		self.short_names = short_names
 		self.parent = parent
 		self.mirror = mirror
 		self.key_index = key_index
+		self.weight = weight
 
 
 def to_heatmap(ausgabe, depth, num_joints, height, width):
@@ -159,11 +160,24 @@ def analyze(spec_cam, true_cam, valid_mask, mirror, thresh):
 	return stats
 
 
-def least_square(A, b):
+def least_square(A, b, weight):
+	'''
+	Performs weighted least square regression
+
+	Args:
+		A: (num_valid x 2, 3)
+		b: (num_valid x 2,)
+		weight: (num_valid,)
+	'''
+	weight = np.tile(weight.reshape(-1, 1) ** 0.5, (1, 2))  # (num_valid, 2)
+
+	A = A * weight.reshape(-1, 1)
+	b = b * weight.reshape(-1)
+
 	return np.linalg.solve(np.dot(A.T, A), np.dot(A.T, b))
 
 
-def get_deter_cam(_spec_mat, _relat_cam, _valid_mask, _intrinsics):
+def get_deter_cam(_spec_mat, _relat_cam, _valid_mask, _intrinsics, weight):
 	'''
 	Reconstructs the reference point location.
 
@@ -195,8 +209,8 @@ def get_deter_cam(_spec_mat, _relat_cam, _valid_mask, _intrinsics):
 
 		A = np.hstack([np.vstack([np.eye(2, 2)] * num_valid), - normalized.reshape(-1, 1)])  # (num_valid x 2, 3)
 
-		b = (normalized * relat_cam[valid, 2:] - relat_cam[valid, :2]).reshape(-1)  # (num_valid x 2)
+		b = (normalized * relat_cam[valid, 2:] - relat_cam[valid, :2]).reshape(-1)  # (num_valid x 2,)
 
-		deter_cams.append(relat_cam + least_square(A, b))
+		deter_cams.append(relat_cam + least_square(A, b, weight[valid]))
 
 	return np.stack(deter_cams)

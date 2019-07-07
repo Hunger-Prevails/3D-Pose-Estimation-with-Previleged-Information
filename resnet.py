@@ -218,17 +218,17 @@ def resnet18(args):
     """
     if args.pretrained:
         model = ResNet(BasicBlock, [2, 2, 2, 2], args)
-        pretrained_dict = torch.load(args.model_path)
+        toy_dict = torch.load(args.model_path)
         model_dict = model.state_dict()
         
-        keys = pretrained_dict.keys()
+        keys = toy_dict.keys()
 
         for key in keys:
             if key not in model_dict:
                 print key
-                del pretrained_dict[key]
+                del toy_dict[key]
         
-        model_dict.update(pretrained_dict)
+        model_dict.update(toy_dict)
         model.load_state_dict(model_dict)
 
         return model
@@ -244,17 +244,17 @@ def resnet50(args):
     """
     if args.pretrained:
         model = ResNet(Bottleneck, [3, 4, 6, 3], args)
-        pretrained_dict = torch.load(args.model_path)
+        toy_dict = torch.load(args.model_path)
         model_dict = model.state_dict()
         
-        keys = pretrained_dict.keys()
+        keys = toy_dict.keys()
 
         for key in keys:
             if key not in model_dict:
                 print key
-                del pretrained_dict[key]
+                del toy_dict[key]
         
-        model_dict.update(pretrained_dict)
+        model_dict.update(toy_dict)
         model.load_state_dict(model_dict)
 
         return model
