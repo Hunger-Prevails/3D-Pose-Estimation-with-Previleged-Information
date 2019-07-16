@@ -1,6 +1,7 @@
 import numpy as np
 import json
 import matplotlib.pyplot as plt
+import matplotlib.patches as patches
 import sys
 import os
 
@@ -35,32 +36,33 @@ def projectPoints(X, cam):
     return x
 
 
-def show_skeleton(image_path, image_coord, confidence):
-    image = plt.imread(image_path)
+def show_skeleton(image, image_coord, confidence, message, bbox = None):
+    '''
+    Shows coco19 skeleton(mat)
+
+    Args:
+        image: path to image
+        image_coord: (2, num_joints)
+        confidence: (num_joints,)
+    '''
+    image = plt.imread(image) if isinstance(image, str) else image
 
     plt.figure(figsize = (15, 15))
 
-    body_edges = np.array(
-                    [
-                        [1, 2],
-                        [1, 4],
-                        [4, 5],
-                        [5, 6],
-                        [1, 3],
-                        [3, 7],
-                        [7, 8],
-                        [8, 9],
-                        [3, 13],
-                        [13, 14],
-                        [14, 15],
-                        [1, 10],
-                        [10, 11],
-                        [11, 12]
-                    ]
-                ) - 1
+    from joint_settings import cmu_short_names as short_names
+    from joint_settings import cmu_parent as parent
 
-    plt.subplot(1, 3, 1)
-    plt.title('3D Body Projection on HD view (' + image_path + ')')
+    mapper = dict(zip(short_names, range(len(short_names))))
+
+    body_edges = [mapper[parent[name]] for name in short_names if name in parent]
+    body_edges = np.hstack(
+        [
+            np.arange(len(body_edges)).reshape(-1, 1),
+            np.array(body_edges).reshape(-1, 1)
+        ]
+    )
+    fig = plt.subplot(1, 3, 1)
+    plt.title(message + ':' + str(image.shape))
     plt.imshow(image)
     currentAxis = plt.gca()
     currentAxis.set_autoscale_on(False)
@@ -72,6 +74,10 @@ def show_skeleton(image_path, image_coord, confidence):
     for edge in body_edges:
         if valid[edge[0]] and valid[edge[1]]:
             plt.plot(image_coord[0, edge], image_coord[1, edge])
+
+    if bbox is not None:
+        rect = patches.Rectangle((bbox[0], bbox[1]), bbox[2], bbox[3], linewidth = 2, edgecolor = 'r', facecolor = 'none')
+        fig.add_patch(rect)
 
     plt.draw()
     plt.show()

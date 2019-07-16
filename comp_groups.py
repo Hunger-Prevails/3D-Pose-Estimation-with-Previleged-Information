@@ -36,7 +36,7 @@ def get_mpii_group(phase, args):
 	joint_info = JointInfo(short_names, _parent, _mirror, mapper[base_joint])
 
 	valid_images = os.path.join(args.comp_root_path, 'valid_images.txt')
-	valid_images = [line for line in open(valid_images)]
+	valid_images = [line.strip() for line in open(valid_images)]
 
 	release = json.load(open('mpii_human_pose.json'))
 
@@ -62,7 +62,7 @@ def get_mpii_group(phase, args):
 			down_path = os.path.join(args.comp_down_path, str(aid) + '_' + str(sing) + '.jpg')
 
 			if sample:
-				data_params = (down_path, args.side_in, args.random_zoom, args.box_margin)
+				data_params = (down_path, args.side_in, args.random_zoom, args.box_margin, annotation['shape'])
 				processes.append(pool.apply_async(func = make_sample, args = (sample, image_path, data_params)))
 
 	pool.close()
@@ -100,13 +100,11 @@ def coord_to_box(image_coord, box_margin, border, scale):
 
 def make_sample(sample, image_path, data_params):
 
-	down_path, side_in, random_zoom, box_margin = data_params
+	down_path, side_in, random_zoom, box_margin, image_shape = data_params
 
 	image_coords = np.array(sample['joints']).reshape((16, 3))
 
-	image = jpeg4py.JPEG(image_path).decode()
-
-	border = np.array(image.shape[:2])[::-1]
+	border = np.array(image_shape[:2])[::-1]
 
 	image_coords[:, 2] *= (0 <= image_coords[:, 0])
 	image_coords[:, 2] *= (0 <= image_coords[:, 1])
@@ -142,10 +140,60 @@ def make_sample(sample, image_path, data_params):
 
 		view_patch = np.zeros((expand_side, expand_side, 3)).astype(np.uint8)
 
+		image = jpeg4py.JPEG(image_path).decode()
+
 		view_patch[dest_begin[1]:dest_end[1], dest_begin[0]:dest_end[0]] = image[crop_begin[1]:crop_end[1], crop_begin[0]:crop_end[0]]
 
 		save_patch = cv2.resize(view_patch, (dest_side, dest_side))
 
 		cv2.imwrite(down_path, save_patch[:, :, ::-1])
 
+	# show_skeleton(down_path, image_coords[:, :2].T, image_coords[:, 2])
+
 	return MatSample(down_path, image_coords, bbox)
+
+
+def show_skeleton(image, image_coord, confidence):
+	'''
+	Shows coco19 skeleton(mat)
+
+	Args:
+		image: path to image
+		image_coord: (2, num_joints)
+		confidence: (num_joints,)
+	'''
+	from joint_settings import mpii_short_names as short_names
+	from joint_settings import mpii_parent as parent
+
+	mapper = dict(zip(short_names, range(len(short_names))))
+
+	body_edges = [mapper[parent[name]] for name in short_names if name in parent]
+	body_edges = np.hstack(
+		[
+			np.arange(len(body_edges)).reshape(-1, 1),
+			np.array(body_edges).reshape(-1, 1)
+		]
+	)
+
+	import matplotlib.pyplot as plt
+
+	image = plt.imread(image) if isinstance(image, str) else image
+
+	plt.figure(figsize = (15, 15))
+
+	plt.subplot(1, 3, 1)
+	plt.title('2D Body Skeleton in comp groups' + str(image.shape))
+	plt.imshow(image)
+	currentAxis = plt.gca()
+	currentAxis.set_autoscale_on(False)
+
+	valid = (0.1 <= confidence)
+
+	plt.plot(image_coord[0, valid], image_coord[1, valid], '.')
+
+	for edge in body_edges:
+		if valid[edge[0]] and valid[edge[1]]:
+			plt.plot(image_coord[0, edge], image_coord[1, edge])
+
+	plt.draw()
+	plt.show()

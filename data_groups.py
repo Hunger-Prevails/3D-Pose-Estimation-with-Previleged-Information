@@ -68,14 +68,19 @@ def make_sample(data_sample, data_params, camera):
 	new_path = os.path.join(folder_down, os.path.basename(image_path))
 
 	new_bbox = cameralib.reproject_points(bbox[None, :2], camera, new_camera)[0]
+
 	new_bbox = np.concatenate((new_bbox, bbox[2:] * scale_factor))
 
 	new_coord = cameralib.reproject_points(image_coord[:, :2], camera, new_camera)
+
 	new_coord = np.concatenate((new_coord, image_coord[:, 2:]), axis = 1)
 
 	if not os.path.exists(new_path):
+
 		image = jpeg4py.JPEG(image_path).decode()
+
 		new_image = cameralib.reproject_image(image, camera, new_camera, (dest_side, dest_side))
+
 		cv2.imwrite(new_path, new_image[:, :, ::-1])
 
 	return PoseSample(new_path, body_pose, new_coord, new_bbox, new_camera)
@@ -210,7 +215,3 @@ def get_cmu_group(phase, args):
 	samples = [process.get() for process in processes]
 
 	return PoseGroup(phase, joint_info, [sample for sample in samples if sample])
-
-
-def get_mpi_3dhp_group(phase, args):
-	pass

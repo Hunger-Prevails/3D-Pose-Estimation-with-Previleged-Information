@@ -19,7 +19,7 @@ from mat_utils import Mapper
 def get_comp_loader(args, phase, dest_info):
     comp_group = getattr(comp_groups, 'get_' + args.comp_name + '_group')(phase, args)
 
-    match = getattr(joint_settings, args.comp_name + '_' + args.data_name)
+    match = getattr(joint_settings, args.comp_name + '_' + args.data_name + '_match')
 
     mapper = Mapper(comp_group.joint_info, dest_info, match)
 
@@ -49,6 +49,7 @@ class Lecture(data.Dataset):
         self.random_zoom = args.random_zoom
         self.side_in = args.side_in
         self.do_perturbate = args.do_perturbate
+        self.do_occlude = args.do_occlude
 
         self.mean = [0.485, 0.456, 0.406]
         self.dev = [0.229, 0.224, 0.225]
@@ -58,7 +59,7 @@ class Lecture(data.Dataset):
             transforms.Normalize(mean=self.mean, std=self.dev)])
 
 
-    def parse_sample(sample):
+    def parse_sample(self, sample):
         image_coords = sample.image_coords
 
         image = jpeg4py.JPEG(sample.image_path).decode()
@@ -91,15 +92,17 @@ class Lecture(data.Dataset):
         roi_begin = (roi_center - roi_side / 2).astype(np.int)
         roi_end = roi_begin + roi_side
 
-        scale_factor = self.side_in / roi_side
+        scale_factor = self.side_in / float(roi_side)
 
         image_coords[:, :2] = (image_coords[:, :2] - roi_begin) * scale_factor
 
-        feed_in = cv2.resize(image[roi_begin[1]:roi_end[1], roi_begin[0]:roi_end[0]], (side_in, side_in))
+        feed_in = cv2.resize(image[roi_begin[1]:roi_end[1], roi_begin[0]:roi_end[0]], (self.side_in, self.side_in))
 
-        image_coords = mapper.map_coord(image_coords)
+        feed_in = self.transform(self.occlusion_augment(feed_in)) if self.do_occlude else self.transform(feed_in)
 
-        return feed_in, image_coords[:, :2], image_coords[:, 2] != 0
+        image_coords = self.mapper.map_coord(image_coords)
+
+        return feed_in, np.float32(image_coords[:, :2]), np.float32(image_coords[:, 2] != 0)
 
 
     def __getitem__(self, index):
@@ -130,7 +133,7 @@ class Exam(data.Dataset):
             transforms.Normalize(mean=self.mean, std=self.dev)])
 
 
-    def parse_sample(sample):
+    def parse_sample(self, sample):
         image_coords = sample.image_coords
 
         image = jpeg4py.JPEG(sample.image_path).decode()
@@ -148,11 +151,11 @@ class Exam(data.Dataset):
 
         image_coords[:, :2] = (image_coords[:, :2] - roi_begin) * scale_factor
 
-        feed_in = cv2.resize(image[roi_begin[1]:roi_end[1], roi_begin[0]:roi_end[0]], (side_in, side_in))
+        feed_in = cv2.resize(image[roi_begin[1]:roi_end[1], roi_begin[0]:roi_end[0]], (self.side_in, self.side_in))
 
-        image_coords = mapper.map_coord(image_coords)
+        image_coords = self.mapper.map_coord(image_coords)
 
-        return feed_in, image_coords[:, :2], image_coords[:, 2] != 0
+        return self.transform(feed_in), image_coords[:, :2], np.float32(image_coords[:, 2] != 0)
 
 
     def __getitem__(self, index):

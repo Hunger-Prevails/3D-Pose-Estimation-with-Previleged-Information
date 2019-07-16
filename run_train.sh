@@ -20,4 +20,6 @@ python main.py \
 				-occluder_path /globalwork/liu/pascal_occluders \
 				-save_path /globalwork/liu/pose_track \
 				-criterion SmoothL1 \
-				-n_epochs 30
+				-n_epochs 30 \
+				-batch_size 32 \
+				-n_cudas 1

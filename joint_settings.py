@@ -21,6 +21,7 @@ cmu_short_names = [
 ]
 cmu_parent = dict(
 	[
+		('BodyCenter', 'BodyCenter'),
 		('Nose', 'Neck'),
 		('lShoulder', 'Neck'),
 		('lElbow', 'lShoulder'),
@@ -104,10 +105,11 @@ mpii_short_names = [
 ]
 mpii_parent = dict(
 	[
-		('Neck', 'Thorax'),
-		('Head', 'Neck'),
-		('lShoulder', 'Neck'),
-		('rShoulder', 'Neck'),
+		('Neck', 'Neck'),
+		('Head', 'Head'),
+		('Thorax', 'Thorax'),
+		('lShoulder', 'Thorax'),
+		('rShoulder', 'Thorax'),
 		('lElbow', 'lShoulder'),
 		('rElbow', 'rShoulder'),
 		('lWrist', 'lElbow'),
@@ -143,11 +145,8 @@ mpii_cmu_match = dict(
 	[
 		('rAnkle', 'rAnkle'),
 		('rKnee', 'rKnee'),
-		('rHip', 'rHip'),
-		('lHip', 'lHip'),
 		('lKnee', 'lKnee'),
 		('lAnkle', 'lAnkle'),
-		('Pelvis', 'BodyCenter'),
 		('Thorax', 'Neck'),
 		('rWrist', 'rWrist'),
 		('rElbow', 'rElbow'),

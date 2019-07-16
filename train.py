@@ -19,9 +19,11 @@ class Trainer:
         self.list_params = [model.parameters()]
 
         if args.do_complement:
-            self.comp_loss_weight = args.comp_loss_weight
+            self.alpha = args.comp_loss_weight
 
             self.comp_linear = nn.Linear(args.num_joints, args.num_joints)
+            nn.init.eye_(self.comp_linear.weight)
+            nn.init.constant_(self.comp_linear.bias, 0.0)
 
             if args.n_cudas:
                 self.comp_linear = self.comp_linear.cuda()
@@ -63,7 +65,7 @@ class Trainer:
 
         side_out = (self.side_in - 1) / self.stride + 1
 
-        comp_data_iter = iter(comp_loader) if comp_loader != None else None
+        comp_data_iter = iter(comp_loader) if comp_loader else None
 
         for i, (image, true_cam, true_mat, valid_mask) in enumerate(data_loader):
 
@@ -96,11 +98,11 @@ class Trainer:
 
             spec_cam = relat_cam + true_cam[:, key_index:key_index + 1]
 
-            cam_loss = self.criterion(spec_cam * mask_valid, true_cam * mask_valid)
+            cam_loss = self.criterion(spec_cam * valid_mask, true_cam * valid_mask)
 
-            loss = cam_loss + mat_loss
+            loss = cam_loss + (1 - self.alpha) * mat_loss if comp_loader else cam_loss + mat_loss
 
-            if comp_loader != None:
+            if comp_loader:
                 try:
                     comp_image, comp_true_mat, comp_valid_mask = next(comp_data_iter)
                 except:
@@ -112,7 +114,7 @@ class Trainer:
 
                     comp_true_mat = comp_true_mat.to(cuda_device)
 
-                    comp_valid_mask = comp_valid_mask.to(cuda_device)
+                    comp_valid_mask = comp_valid_mask.unsqueeze(-1).to(cuda_device)
 
                 comp_batch = comp_image.size(0)
 
@@ -124,9 +126,9 @@ class Trainer:
 
                 comp_spec_mat = self.comp_linear(comp_spec_mat).permute(0, 2, 1)
 
-                comp_mat_loss = self.criterion(comp_spec_mat * comp_valid_mask, comp_true_mat * comp_valid_mask)
+                comp_loss = self.criterion(comp_spec_mat * comp_valid_mask, comp_true_mat * comp_valid_mask)
 
-                loss += self.comp_loss_weight * comp_mat_loss
+                loss += self.alpha * comp_loss
 
             self.optimizer.zero_grad()
             loss.backward()
@@ -138,7 +140,9 @@ class Trainer:
             mat_loss_avg += mat_loss.item() * batch
             total += batch
 
-            print "| train Epoch[%d] [%d/%d]  Cam Loss: %1.4f  Mat Loss: %1.4f" % (epoch, i, n_batches, cam_loss.item(), mat_loss.item())
+            message = '| train Epoch[%d] [%d/%d]' % (epoch, i, n_batches)
+            message += '  Cam Loss: %1.4f  Mat Loss: %1.4f  Comp Loss: %1.4f' % (cam_loss.item(), mat_loss.item(), comp_loss.item())
+            print message
 
         cam_loss_avg /= total
         mat_loss_avg /= total
@@ -190,7 +194,7 @@ class Trainer:
 
             loss_avg += loss.item() * batch
             total += batch
-            
+
             print "| train Epoch[%d] [%d/%d]  Loss %1.4f" % (epoch, i, n_batches, loss.item())
 
         loss_avg /= total
@@ -402,7 +406,7 @@ class Trainer:
         return record
 
 
-    def test(self, epoch, test_loader, do_track):
+    def test(self, epoch, test_loader, do_track = False):
         self.model.eval()
 
         if self.joint_space:
