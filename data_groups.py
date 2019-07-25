@@ -33,7 +33,7 @@ def get_cameras(json_file, cam_names):
 		)
 
 
-def make_sample(data_sample, data_params, camera):
+def make_sample(data_sample, data_params):
 	'''
 	params
 		bbox: (4,) bounding box in original camera view
@@ -43,15 +43,22 @@ def make_sample(data_sample, data_params, camera):
 	returns
 		pose sample with path to down-scaled image and corresponding box/image_coord
 	'''
+	image_path, image_coord, body_pose, camera = data_sample
+	side_in, random_zoom, box_margin, essence, folder_down = data_params
 
-	image_path, image_coord, bbox, body_pose = data_sample
-	folder_down, side_in, random_zoom = data_params
+	border = np.array([1920, 1080])
+
+	cond1 = np.all(0 <= image_coord[:, :2], axis = 1)
+	cond2 = np.all(image_coord[:, :2] <= border, axis = 1)
+
+	image_coord[np.where(~(cond1 & cond2)), 2] = -1
 
 	try:
-		assert np.all(bbox[:2] >= 0)
-		assert np.all(bbox[:2] + bbox[2:] <= np.array([1920, 1080]))
+		assert np.all(image_coord[essence, 2] != -1)
 	except:
 		return None
+
+	bbox = coord_to_box(image_coord, box_margin, border)
 
 	expand_side = np.sum(bbox[2:] ** 2) ** 0.5
 
@@ -86,22 +93,27 @@ def make_sample(data_sample, data_params, camera):
 	return PoseSample(new_path, body_pose, new_coord, new_bbox, new_camera)
 
 
-def coord_to_box(image_coord, box_margin):
+def coord_to_box(image_coord, box_margin, border):
 	'''
 	params
 		image_coord: (19 x 3) joint coords in image space with confidence scores
 	returns
 		image_box: (4,) pseudo bounding box of the person
 	'''
-	x_min = np.min(image_coord[:, 0])
-	x_max = np.max(image_coord[:, 0])
-	y_min = np.min(image_coord[:, 1])
-	y_max = np.max(image_coord[:, 1])
+	valid = image_coord[np.where(image_coord[:, 2] != -1)]
+
+	x_min = np.amin(valid[:, 0])
+	x_max = np.amax(valid[:, 0])
+	y_min = np.amin(valid[:, 1])
+	y_max = np.amax(valid[:, 1])
 
 	center = np.array([(x_min + x_max) / 2, (y_min + y_max) / 2])
-	shape = np.array([x_max - x_min, y_max - y_min])
+	shape = np.array([x_max - x_min, y_max - y_min]) / box_margin
 
-	return np.hstack([center - shape / box_margin / 2, shape / box_margin])
+	begin = np.maximum(center - shape / 2, np.zeros(2))
+	end = np.minimum(center + shape / 2, border)
+
+	return np.hstack([begin, end - begin])
 
 
 def get_cmu_group(phase, args):
@@ -113,6 +125,7 @@ def get_cmu_group(phase, args):
 	from joint_settings import cmu_mirror as mirror
 	from joint_settings import cmu_base_joint as base_joint
 	from joint_settings import cmu_weight as weight
+	from joint_settings import cmu_overlook as overlook
 
 	mapper = dict(zip(short_names, range(len(short_names))))
 	
@@ -124,6 +137,8 @@ def get_cmu_group(phase, args):
 
 	_mirror[np.array([name in mirror for name in short_names])] = np.array(map_mirror)
 	_parent[np.array([name in parent for name in short_names])] = np.array(map_parent)
+
+	essence = np.array([mapper[name] for name in short_names if name not in overlook])
 
 	joint_info = JointInfo(short_names, _parent, _mirror, mapper[base_joint], np.array(weight))
 
@@ -199,12 +214,11 @@ def get_cmu_group(phase, args):
 
 				image_path = os.path.join(cam_folders[cam_name], cam_name + '_' + str(frame).zfill(8) + '.jpg')
 				image_coord = np.array(cam_files[cam_name]['image_coord'][pose_idx])
-				image_box = coord_to_box(image_coord, args.box_margin)
 
-				data_sample = (image_path, image_coord, image_box, body_pose)
-				data_params = (down_folders[cam_name], args.side_in, args.random_zoom)
+				data_sample = (image_path, image_coord, body_pose, cameras[cam_name])
+				data_params = (args.side_in, args.random_zoom, args.box_margin, essence, down_folders[cam_name])
 
-				processes.append(pool.apply_async(func = make_sample, args = (data_sample, data_params, cameras[cam_name])))
+				processes.append(pool.apply_async(func = make_sample, args = (data_sample, data_params)))
 
 			print 'collecting samples [', str(frame_idx) + '/' + str((end_frame - start_frame) / interval), '] sequence', sequence
 

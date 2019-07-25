@@ -38,6 +38,7 @@ class Trainer:
         self.depth_range = args.depth_range
         self.flip_test = args.flip_test
         self.joint_space = args.joint_space
+        self.do_track = args.do_track
 
         self.learn_rate = args.learn_rate
         self.num_epochs = args.n_epochs
@@ -61,13 +62,16 @@ class Trainer:
 
         cam_loss_avg = 0
         mat_loss_avg = 0
+        recon_loss_avg = 0
         total = 0
 
         side_out = (self.side_in - 1) / self.stride + 1
 
+        do_track = self.do_track and (epoch != 1)
+
         comp_data_iter = iter(comp_loader) if comp_loader else None
 
-        for i, (image, true_cam, true_mat, valid_mask) in enumerate(data_loader):
+        for i, (image, true_cam, true_mat, valid_mask, intrinsics) in enumerate(data_loader):
 
             if self.n_cudas:
                 image = image.to(cuda_device)
@@ -76,7 +80,9 @@ class Trainer:
 
                 true_mat = true_mat.to(cuda_device)
 
-                valid_mask = valid_mask.unsqueeze(-1).to(cuda_device)
+                valid_mask = valid_mask.to(cuda_device)
+
+                intrinsics = intrinsics.to(cuda_device)
 
             batch = image.size(0)
 
@@ -88,7 +94,9 @@ class Trainer:
 
             spec_mat = mat_utils.decode(heat_mat, self.side_in)
 
-            mat_loss = self.criterion(spec_mat * valid_mask, true_mat * valid_mask)
+            mat_loss = self.criterion(spec_mat.view(-1, 2)[valid_mask.view(-1)], true_mat.view(-1, 2)[valid_mask.view(-1)])
+
+            mat_loss_avg += mat_loss.item() * batch
 
             key_index = self.data_info.key_index
 
@@ -98,7 +106,9 @@ class Trainer:
 
             spec_cam = relat_cam + true_cam[:, key_index:key_index + 1]
 
-            cam_loss = self.criterion(spec_cam * valid_mask, true_cam * valid_mask)
+            cam_loss = self.criterion(spec_cam.view(-1, 3)[valid_mask.view(-1)], true_cam.view(-1, 3)[valid_mask.view(-1)])
+
+            cam_loss_avg += cam_loss.item() * batch
 
             loss = cam_loss + (1 - self.alpha) * mat_loss if comp_loader else cam_loss + mat_loss
 
@@ -126,9 +136,18 @@ class Trainer:
 
                 comp_spec_mat = self.comp_linear(comp_spec_mat).permute(0, 2, 1)
 
-                comp_loss = self.criterion(comp_spec_mat * comp_valid_mask, comp_true_mat * comp_valid_mask)
+                comp_loss = self.criterion(comp_spec_mat.view(-1, 2)[comp_valid_mask.view(-1)], comp_true_mat.view(-1, 2)[comp_valid_mask.view(-1)])
 
                 loss += self.alpha * comp_loss
+
+            if do_track:
+                recon_cam = utils.get_recon_cam(spec_mat, relat_cam, valid_mask, intrinsics)
+
+                recon_loss = self.criterion(recon_cam.view(-1, 3)[valid_mask.view(-1)], true_cam.view(-1, 3)[valid_mask.view(-1)])
+
+                recon_loss_avg += recon_loss.item() * batch
+
+                loss = loss * 0.5 + recon_loss
 
             self.optimizer.zero_grad()
             loss.backward()
@@ -136,21 +155,32 @@ class Trainer:
             nn.utils.clip_grad_norm_(self.get_params(), self.grad_norm)
             self.optimizer.step()
 
-            cam_loss_avg += cam_loss.item() * batch
-            mat_loss_avg += mat_loss.item() * batch
             total += batch
 
             message = '| train Epoch[%d] [%d/%d]' % (epoch, i, n_batches)
-            message += '  Cam Loss: %1.4f  Mat Loss: %1.4f  Comp Loss: %1.4f' % (cam_loss.item(), mat_loss.item(), comp_loss.item())
+            message += '  Cam Loss: %1.4f' % (cam_loss.item())
+            message += '  Mat Loss: %1.4f' % (mat_loss.item())
+
+            if comp_loader:
+                message += '  Comp Loss: %1.4f' % (comp_loss.item())
+
+            if do_track:
+                message += '  Recon Loss: %1.4f' % (recon_loss.item())
+
             print message
 
         cam_loss_avg /= total
         mat_loss_avg /= total
+        recon_loss_avg /= total
 
-        print ''
-        print '=> train Epoch[%d]  Cam Loss: %1.4f  Mat Loss: %1.4f\n' % (epoch, cam_loss_avg, mat_loss_avg)
+        message = '=> train Epoch[%d]  Cam Loss: %1.4f  Mat Loss: %1.4f' % (epoch, cam_loss_avg, mat_loss_avg)
 
-        return dict(cam_train_loss = cam_loss_avg, mat_train_loss = mat_loss_avg)
+        if do_track:
+            message += '  Recon Loss: %1.4f'
+
+        print '\n' + message + '\n'
+
+        return dict(cam_train_loss = cam_loss_avg, mat_train_loss = mat_loss_avg, recon_loss_avg = recon_loss_avg)
 
 
     def cam_train(self, epoch, data_loader, cuda_device):
@@ -168,7 +198,7 @@ class Trainer:
 
                 true_cam = true_cam.to(cuda_device)
 
-                valid_mask = valid_mask.unsqueeze(-1).to(cuda_device)
+                valid_mask = valid_mask.to(cuda_device)
 
             batch = image.size(0)
 
@@ -184,7 +214,9 @@ class Trainer:
 
             spec_cam = relat_cam + true_cam[:, key_index:key_index + 1]
 
-            loss = self.criterion(spec_cam * mask_valid, true_cam * mask_valid)
+            loss = self.criterion(spec_cam.view(-1, 3)[valid_mask.view(-1)], true_cam.view(-1, 3)[valid_mask.view(-1)])
+
+            loss_avg += loss.item() * batch
 
             self.optimizer.zero_grad()
             loss.backward()
@@ -192,7 +224,6 @@ class Trainer:
             nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_norm)
             self.optimizer.step()
 
-            loss_avg += loss.item() * batch
             total += batch
 
             print "| train Epoch[%d] [%d/%d]  Loss %1.4f" % (epoch, i, n_batches, loss.item())
@@ -215,7 +246,7 @@ class Trainer:
             return self.cam_train(epoch, data_loader, torch.device('cuda'))
 
 
-    def joint_test(self, epoch, test_loader, cuda_device, do_track = False):
+    def joint_test(self, epoch, test_loader, cuda_device):
         n_batches = len(test_loader)
 
         cam_loss_avg = 0
@@ -237,7 +268,7 @@ class Trainer:
 
                 true_mat = true_mat.to(cuda_device)
 
-                mask_valid = valid_mask.unsqueeze(-1).to(cuda_device)
+                valid_mask = valid_mask.to(cuda_device)
 
             batch = image.size(0)
 
@@ -274,8 +305,8 @@ class Trainer:
 
                 spec_cam = relat_cam + true_cam[:, key_index:key_index + 1]
 
-                cam_loss = self.criterion(spec_cam * mask_valid, true_cam * mask_valid)
-                mat_loss = self.criterion(spec_mat * mask_valid, true_mat * mask_valid)
+                cam_loss = self.criterion(spec_cam.view(-1, 3)[valid_mask.view(-1)], true_cam.view(-1, 3)[valid_mask.view(-1)])
+                mat_loss = self.criterion(spec_mat.view(-1, 2)[valid_mask.view(-1)], true_mat.view(-1, 2)[valid_mask.view(-1)])
 
                 loss = cam_loss + mat_loss
 
@@ -285,7 +316,7 @@ class Trainer:
 
             print "| test Epoch[%d] [%d/%d]  Cam Loss: %1.4f  Mat Loss: %1.4f" % (epoch, i, n_batches, cam_loss.item(), mat_loss.item())
 
-            valid_mask = valid_mask.numpy()
+            valid_mask = valid_mask.cpu().numpy().astype(np.bool)
 
             spec_mat = spec_mat.cpu().numpy()
             true_mat = true_mat.cpu().numpy()
@@ -300,7 +331,7 @@ class Trainer:
 
             cam_stats.append(utils.analyze(spec_cam, true_cam, valid_mask, self.data_info.mirror, self.thresh))
 
-            if do_track:
+            if self.do_track:
 
                 relat_cam = relat_cam.cpu().numpy()
 
@@ -325,11 +356,14 @@ class Trainer:
 
         print '=>[SPEC] cam_mean: %1.3f  [pck]: %1.3f  [auc]: %1.3f\n' % (record['cam_mean'], record['score_pck'], record['score_auc'])
 
-        if do_track:
+        if self.do_track:
 
             track_rec = utils.parse_epoch(det_stats, total)
 
             print '=>[DETER] cam_mean: %1.3f  [pck]: %1.3f  [auc]: %1.3f\n' % (track_rec['cam_mean'], track_rec['score_pck'], track_rec['score_auc'])
+
+            for key in track_rec:
+                record['recon_' + key] = track_rec[key]
 
         return record
 
@@ -351,7 +385,7 @@ class Trainer:
 
                 true_cam = true_cam.to(cuda_device)
 
-                mask_valid = valid_mask.unsqueeze(-1).to(cuda_device)
+                valid_mask = valid_mask.to(cuda_device)
 
             batch = image.size(0)
 
@@ -376,12 +410,12 @@ class Trainer:
 
                 spec_cam = relat_cam + true_cam[:, key_index:key_index + 1]
 
-                loss = self.criterion(spec_cam * mask_valid, true_cam * mask_valid)
+                loss = self.criterion(spec_cam.view(-1, 3)[valid_mask.view(-1)], true_cam.view(-1, 3)[valid_mask.view(-1)])
 
                 loss_avg += loss.item() * batch
                 total += batch
 
-            valid_mask = valid_mask.numpy()
+            valid_mask = valid_mask.cpu().numpy().astype(np.bool)
 
             spec_cam = spec_cam.cpu().numpy()
             true_cam = true_cam.cpu().numpy()
@@ -406,11 +440,11 @@ class Trainer:
         return record
 
 
-    def test(self, epoch, test_loader, do_track = False):
+    def test(self, epoch, test_loader):
         self.model.eval()
 
         if self.joint_space:
-            return self.joint_test(epoch, test_loader, torch.device('cuda'), do_track)
+            return self.joint_test(epoch, test_loader, torch.device('cuda'))
         else:
             return self.cam_test(epoch, test_loader, torch.device('cuda'))
 
@@ -422,6 +456,9 @@ class Trainer:
             learn_rate = self.learn_rate * 0.2
         else:
             learn_rate = self.learn_rate * 0.04
+
+        if self.do_track and epoch != 1:
+            learn_rate /= 2
 
         for group in self.optimizer.param_groups:
             group['lr'] = learn_rate

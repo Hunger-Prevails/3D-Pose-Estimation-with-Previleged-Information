@@ -6,11 +6,11 @@ python main.py \
 				-save_record \
 				-pretrained \
 				-joint_space \
-				-do_complement \
 				-valid_check \
+				-do_track \
 				-model resnet50 \
 				-model_path /home/liu/pose_volumetric/models/resnet50.pth \
-				-suffix baseline \
+				-suffix do_track \
 				-data_name cmu \
 				-data_root_path /globalwork/liu/cmu_panoptic \
 				-data_down_path /globalwork/liu/cmu_panoptic_down \
@@ -21,5 +21,5 @@ python main.py \
 				-save_path /globalwork/liu/pose_track \
 				-criterion SmoothL1 \
 				-n_epochs 30 \
-				-batch_size 32 \
-				-n_cudas 1
+				-batch_size 64 \
+				-n_cudas 2

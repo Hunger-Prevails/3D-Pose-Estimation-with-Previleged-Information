@@ -14,10 +14,10 @@ cmu_short_names = [
 	'rHip',
 	'rKnee',
 	'rAnkle',
-	'rEye',
 	'lEye',
-	'rEar',
-	'lEar'
+	'lEar',
+	'rEye',
+	'rEar'
 ]
 cmu_parent = dict(
 	[
@@ -82,6 +82,12 @@ cmu_weight = [
 	0.24344002,
 	0.22986239,
 	0.23612062
+]
+cmu_overlook = [
+	'lWrist',
+	'lAnkle',
+	'rWrist',
+	'rAnkle'
 ]
 cmu_base_joint = 'BodyCenter'
 

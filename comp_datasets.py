@@ -102,7 +102,7 @@ class Lecture(data.Dataset):
 
         image_coords = self.mapper.map_coord(image_coords)
 
-        return feed_in, np.float32(image_coords[:, :2]), np.float32(image_coords[:, 2] != 0)
+        return feed_in, np.float32(image_coords[:, :2]), np.uint8(image_coords[:, 2] != 0)
 
 
     def __getitem__(self, index):
@@ -155,7 +155,7 @@ class Exam(data.Dataset):
 
         image_coords = self.mapper.map_coord(image_coords)
 
-        return self.transform(feed_in), image_coords[:, :2], np.float32(image_coords[:, 2] != 0)
+        return self.transform(feed_in), image_coords[:, :2], np.uint8(image_coords[:, 2] != 0)
 
 
     def __getitem__(self, index):

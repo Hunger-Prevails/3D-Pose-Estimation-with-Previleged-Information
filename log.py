@@ -5,7 +5,7 @@ import numpy as np
 class Logger:
 
     def __init__(self, args, state):
-        self.state = state if state else dict(best_auc = 0, best_oks = 0, best_epoch = 0, epoch = 0)
+        self.state = state if state else dict(best_auc = 0, best_oks = 0, best_recon_auc = 0, best_epoch = 0, epoch = 0)
 
         if not os.path.exists(args.save_path):
             os.mkdir(args.save_path)
@@ -17,6 +17,7 @@ class Logger:
         
         assert args.save_record != args.test_only or args.val_only
 
+        self.do_track = args.do_track
         self.save_record = args.save_record
         self.train_record = None
 
@@ -41,10 +42,17 @@ class Logger:
             score_sum = test_recs['score_auc'] + test_recs['score_oks']
             best_sum = self.state['best_auc'] + self.state['best_oks']
 
+            if self.do_track:
+                score_sum += test_recs['recon_score_auc'] * 2
+                best_sum += self.state['best_recon_auc'] * 2
+
             if score_sum > best_sum:
                 self.state['best_auc'] = test_recs['score_auc']
                 self.state['best_oks'] = test_recs['score_oks']
                 self.state['best_epoch'] = epoch
+
+                if self.do_track:
+                    self.state['best_recon_auc'] = test_recs['recon_score_auc']
                 
                 best = os.path.join(self.save_path, 'best.pth')
                 torch.save({'best': epoch}, best)
@@ -68,4 +76,9 @@ class Logger:
 
 
     def final_print(self):
-        print "- Best:  epoch: %3d  auc: %6.3f  oks: %6.3f" % (self.state['best_epoch'], self.state['best_auc'], self.state['best_oks'])
+        message = '- Best:  epoch: %3d  auc: %6.3f  oks: %6.3f' % (self.state['best_epoch'], self.state['best_auc'], self.state['best_oks'])
+
+        if self.do_track:
+            message += '  recon_auc: %6.3f' % (self.state['best_recon_auc'])
+
+        print message

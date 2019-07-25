@@ -107,12 +107,12 @@ class Lecture(data.Dataset):
         image = self.transform(self.occlusion_augment(image)) if self.do_occlude else self.transform(image)
 
         if self.valid_check:
-            valid_mask = np.float32(self.thresh_valid <= sample.image_coords[:, 2])
+            valid_mask = np.uint8(self.thresh_valid <= sample.image_coords[:, 2])
         else:
-            valid_mask = np.float32(sample.image_coords[:, 2] != 0)
+            valid_mask = np.uint8(sample.image_coords[:, 2] != -1)
 
         if self.joint_space:
-            return image, camera_coords, image_coords, valid_mask
+            return image, camera_coords, image_coords, valid_mask, camera.intrinsics
         else:
             return image, camera_coords, valid_mask
 
@@ -190,9 +190,9 @@ class Exam(data.Dataset):
         back_rotation = np.matmul(sample.camera.R, camera.R.T)
 
         if self.valid_check:
-            valid_mask = np.float32(self.thresh_valid <= sample.image_coords[:, 2])
+            valid_mask = np.uint8(self.thresh_valid <= sample.image_coords[:, 2])
         else:
-            valid_mask = np.float32(sample.image_coords[:, 2] != 0)
+            valid_mask = np.uint8(sample.image_coords[:, 2] != -1)
 
         if self.joint_space:
             return image, camera_coords, image_coords, back_rotation, valid_mask, camera.intrinsics

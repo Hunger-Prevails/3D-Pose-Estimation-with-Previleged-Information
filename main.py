@@ -93,7 +93,7 @@ def main():
     print "=> Trainer is ready"
 
     if args.test_only or args.val_only:
-        test_rec = trainer.test(0, test_loader, args.do_track)
+        test_rec = trainer.test(0, test_loader)
 
     else:
         start_epoch = logger.state['epoch'] + 1

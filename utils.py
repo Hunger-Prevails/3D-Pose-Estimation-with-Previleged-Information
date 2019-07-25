@@ -137,7 +137,7 @@ def analyze(spec_cam, true_cam, valid_mask, mirror, thresh):
 	mirrored = np.linalg.norm(spec_cam - true_cam[:, mirror], axis = -1)
 	tangential = np.linalg.norm(spec_cam[:, :, :2] - true_cam[:, :, :2], axis = -1)
 
-	valid = np.where(valid_mask.flatten() == 1.0)
+	valid = valid_mask.flatten()
 
 	original = original.flatten()[valid]
 	mirrored = mirrored.flatten()[valid]
@@ -177,34 +177,31 @@ def least_square(A, b, weight):
 	return np.linalg.solve(np.dot(A.T, A), np.dot(A.T, b))
 
 
-def get_deter_cam(_spec_mat, _relat_cam, _valid_mask, _intrinsics, weight):
+def get_deter_cam(_spec_mat, _relat_cam, _valid, _intrinsics, weight):
 	'''
-	Reconstructs the reference point location.
+	determines the reference point location at test time.
 
 	Args:
 		_spec_mat: (batch_size, num_joints, 2) estimated image coordinates
 		_relat_cam: (batch_size, num_joints, 3) estimated relative camera coordinates with respect to an unknown reference point
-		_valid_mask: (batch_size, num_joints)
+		_valid: (batch_size, num_joints)
 		_intrinsics: (batch_size, 3, 3) camera intrinsics
+		weight: (num_joints,) importance of each joint
 
 	Returns:
 		(batch_size, num_joints, 3) estimation of camera coordinates
 	'''
 	deter_cams = []
 
-	batch_zip = xzip(_spec_mat, _relat_cam, _valid_mask, _intrinsics)
+	batch_zip = xzip(_spec_mat, _relat_cam, _valid, _intrinsics)
 
-	for (spec_mat, relat_cam, valid_mask, intrinsics) in batch_zip:
+	for (spec_mat, relat_cam, valid, intrinsics) in batch_zip:
 
-		valid = np.where(valid_mask == 1.0)
-
-		spec_mat = spec_mat[valid].copy()
-
-		num_valid = spec_mat.shape[0]
+		num_valid = np.sum(valid)
 
 		assert num_valid != 0 and num_valid != 1
 
-		normalized = np.hstack([spec_mat, np.ones((num_valid, 1))])
+		normalized = np.hstack([spec_mat[valid], np.ones((num_valid, 1))])
 		normalized = np.matmul(normalized, np.linalg.inv(intrinsics).T)[:, :2]
 
 		A = np.hstack([np.vstack([np.eye(2, 2)] * num_valid), - normalized.reshape(-1, 1)])  # (num_valid x 2, 3)
@@ -214,3 +211,50 @@ def get_deter_cam(_spec_mat, _relat_cam, _valid_mask, _intrinsics, weight):
 		deter_cams.append(relat_cam + least_square(A, b, weight[valid]))
 
 	return np.stack(deter_cams)
+
+
+def get_recon_cam(_spec_mat, _relat_cam, _valid, _intrinsics):
+	'''
+	reconstructs the reference point location at train time.
+
+	Args:
+		_spec_mat: (batch_size, num_joints, 2) estimated image coordinates
+		_relat_cam: (batch_size, num_joints, 3) estimated relative camera coordinates with respect to an unknown reference point
+		_valid: (batch_size, num_joints)
+		_intrinsics: (batch_size, 3, 3) camera intrinsics
+
+	Returns:
+		(batch_size, num_joints, 3) estimation of camera coordinates
+	'''
+	with torch.no_grad():
+		_unproject = torch.inverse(_intrinsics).permute(0, 2, 1)
+
+	deter_cams = []
+
+	batch_zip = xzip(_spec_mat, _relat_cam, _valid, _unproject)
+
+	for (spec_mat, relat_cam, valid, unproject) in batch_zip:
+
+		num_valid = torch.sum(valid).item()
+
+		assert num_valid != 0 and num_valid != 1
+
+		augment = torch.ones((num_valid, 1)).to(spec_mat.device)
+
+		normalized = torch.cat([spec_mat[valid], augment], dim = 1)  # (num_valid, 3)
+
+		normalized = torch.mm(normalized, unproject)[:, :2]  # (num_valid, 2)
+
+		A = torch.cat([torch.eye(2, 2)] * num_valid).to(spec_mat.device)  # (num_valid x 2, 2)
+
+		A = torch.cat([A, - normalized.contiguous().view(-1, 1)], dim = 1)  # (num_valid x 2, 3)
+
+		b = (normalized * relat_cam[valid, 2:] - relat_cam[valid, :2]).view(-1, 1)  # (num_valid x 2, 1)
+
+		refer = torch.inverse(torch.mm(A.permute(1, 0), A))
+
+		refer = torch.mm(refer, torch.mm(A.permute(1, 0), b)).view(-1)
+
+		deter_cams.append(relat_cam + refer)
+
+	return torch.stack(deter_cams)

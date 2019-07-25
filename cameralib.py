@@ -162,11 +162,9 @@ class Camera:
         Adjusts the intrinsic matrix such that the pixels correspond to squares on the
         image plane.
         """
-        fx = self.intrinsics[0, 0]
-        fy = self.intrinsics[1, 1]
-        fmean = 0.5 * (fx + fy)
-        multiplier = np.array([[fmean / fx, 0, 0], [0, fmean / fy, 0], [0, 0, 1]])
-        self.intrinsics = np.matmul(multiplier, self.intrinsics)
+        fidx = np.array([0, 1])
+        fmean = np.mean(self.intrinsics[fidx, fidx])
+        self.intrinsics[fidx, fidx] = fmean
 
     def horizontal_flip(self):
         self.R[0] *= -1
@@ -184,7 +182,7 @@ class Camera:
         will be shown in the image center of an image shaped 'imshape'.
         """
         self.intrinsics[:2, 2] -= (
-                desired_center - np.float32([imshape[1], imshape[0]]) / 2)
+                np.float32(desired_center) - np.float32([imshape[1], imshape[0]]) / 2)
 
     def turn_towards(self, target_image_point=None, target_world_point=None):
         """

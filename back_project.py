@@ -36,7 +36,7 @@ def projectPoints(X, cam):
     return x
 
 
-def show_skeleton(image, image_coord, confidence, message, bbox = None):
+def show_skeleton(image, image_coord, confidence, message = '', bbox = None):
     '''
     Shows coco19 skeleton(mat)
 
