@@ -176,11 +176,11 @@ class Trainer:
         message = '=> train Epoch[%d]  Cam Loss: %1.4f  Mat Loss: %1.4f' % (epoch, cam_loss_avg, mat_loss_avg)
 
         if do_track:
-            message += '  Recon Loss: %1.4f'
+            message += '  Recon Loss: %1.4f' % (recon_loss_avg)
 
         print '\n' + message + '\n'
 
-        return dict(cam_train_loss = cam_loss_avg, mat_train_loss = mat_loss_avg, recon_loss_avg = recon_loss_avg)
+        return dict(cam_train_loss = cam_loss_avg, mat_train_loss = mat_loss_avg, recon_train_loss = recon_loss_avg)
 
 
     def cam_train(self, epoch, data_loader, cuda_device):

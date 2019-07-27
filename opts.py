@@ -16,6 +16,7 @@ parser.add_argument('-do_complement', action='store_true', help='whether to use 
 parser.add_argument('-valid_check', action='store_true', help='whether to threshold uncertain keypoints off')
 parser.add_argument('-joint_space', action='store_true', help='whether to allow joint-space train data')
 parser.add_argument('-do_track', action='store_true', help='whether to track cam coords via least square optim')
+parser.add_argument('-do_attention', action='store_true', help='whether to learn weights for reference joint regression')
 
 # required options
 parser.add_argument('-model', required=True, help='Backbone architecture')

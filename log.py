@@ -18,8 +18,9 @@ class Logger:
         assert args.save_record != args.test_only or args.val_only
 
         self.do_track = args.do_track
+        self.joint_space = args.joint_space
         self.save_record = args.save_record
-        self.train_record = None
+        self.train_record = torch.load(os.path.join(self.save_path, 'train_record.pth')) if args.resume else None
 
 
     def record(self, epoch, train_recs, test_recs, model):
@@ -39,17 +40,23 @@ class Logger:
             torch.save(checkpoint, model_file)
 
         if test_recs:
-            score_sum = test_recs['score_auc'] + test_recs['score_oks']
-            best_sum = self.state['best_auc'] + self.state['best_oks']
+            score_sum = test_recs['score_auc']
+            best_sum = self.state['best_auc']
+
+            if self.joint_space:
+                score_sum += test_recs['score_oks']
+                best_sum += self.state['best_oks']
 
             if self.do_track:
                 score_sum += test_recs['recon_score_auc'] * 2
                 best_sum += self.state['best_recon_auc'] * 2
 
             if score_sum > best_sum:
-                self.state['best_auc'] = test_recs['score_auc']
-                self.state['best_oks'] = test_recs['score_oks']
                 self.state['best_epoch'] = epoch
+                self.state['best_auc'] = test_recs['score_auc']
+
+                if self.joint_space:
+                    self.state['best_oks'] = test_recs['score_oks']
 
                 if self.do_track:
                     self.state['best_recon_auc'] = test_recs['recon_score_auc']
@@ -76,7 +83,10 @@ class Logger:
 
 
     def final_print(self):
-        message = '- Best:  epoch: %3d  auc: %6.3f  oks: %6.3f' % (self.state['best_epoch'], self.state['best_auc'], self.state['best_oks'])
+        message = '- Best:  epoch: %3d  auc: %6.3f' % (self.state['best_epoch'], self.state['best_auc'])
+
+        if self.joint_space:
+            message += '  oks: %6.3f' % (self.state['best_oks'])
 
         if self.do_track:
             message += '  recon_auc: %6.3f' % (self.state['best_recon_auc'])

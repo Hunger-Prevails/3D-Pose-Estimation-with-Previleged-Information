@@ -8,14 +8,16 @@ python main.py \
 				-joint_space \
 				-do_track \
                                 -model resnet50 \
-                                -model_path /home/liu/pose_volumetric/models/resnet50.pth \
-                                -suffix small_batch \
+                                -model_path /home/liu/pose_track/models/resnet50.pth \
+                                -suffix joint_space \
                                 -data_name cmu \
-                                -data_root_path /globalwork/liu/cmu_panoptic \
+                                -data_root_path /globalwork/data/cmu-panoptic \
                                 -data_down_path /globalwork/liu/cmu_panoptic_down \
 				-comp_name mpii \
                                 -comp_root_path /globalwork/data/mpii \
                                 -comp_down_path /globalwork/liu/mpii_down \
                                 -occluder_path /globalwork/liu/pascal_occluders \
                                 -save_path /globalwork/liu/pose_track \
-                                -criterion SmoothL1
+                                -criterion SmoothL1 \
+				-batch_size 64 \
+				-n_cudas 1

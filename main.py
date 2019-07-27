@@ -69,6 +69,8 @@ def create_model(args):
 
 def main():
     assert args.do_complement <= args.joint_space
+    assert args.do_track <= args.joint_space
+    assert args.do_attention <= args.do_track
 
     model, state = create_model(args)
     print "=> Model and criterion are ready"

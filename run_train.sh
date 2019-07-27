@@ -9,10 +9,10 @@ python main.py \
 				-valid_check \
 				-do_track \
 				-model resnet50 \
-				-model_path /home/liu/pose_volumetric/models/resnet50.pth \
+				-model_path /home/liu/pose_track/models/resnet50.pth \
 				-suffix do_track \
 				-data_name cmu \
-				-data_root_path /globalwork/liu/cmu_panoptic \
+				-data_root_path /globalwork/data/cmu-panoptic \
 				-data_down_path /globalwork/liu/cmu_panoptic_down \
 				-comp_name mpii \
 				-comp_root_path /globalwork/data/mpii \
