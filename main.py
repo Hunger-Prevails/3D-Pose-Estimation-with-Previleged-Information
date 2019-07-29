@@ -36,7 +36,7 @@ def create_model(args):
         save_path = os.path.join(args.save_path, args.model + '-' + args.suffix)
 
         print "=> Loading checkpoint from " + os.path.join(save_path, 'best.pth')
-        assert os.path.exists(save_path), "[!] Checkpoint " + save_path + " doesn't exist" 
+        assert os.path.exists(save_path)
 
         best = torch.load(os.path.join(save_path, 'best.pth'))
         best = best['best'];

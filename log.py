@@ -67,14 +67,18 @@ class Logger:
         train_recs.update(test_recs)
 
         if self.save_record:
+
             if self.train_record:
                 keys = [key for key in train_recs]
-                records = [self.train_record[key] + [train_recs[key]] for key in train_recs]
-                self.train_record = dict(zip(keys, records))
 
+                records = [self.train_record[key] + [train_recs[key]] for key in train_recs]
+
+                self.train_record = dict(zip(keys, records))
             else:
                 keys = [key for key in train_recs]
+
                 records = [[train_recs[key]] for key in train_recs]
+
                 self.train_record = dict(zip(keys, records))
 
             torch.save(self.train_record, os.path.join(self.save_path, 'train_record.pth'))

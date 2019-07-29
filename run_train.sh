@@ -8,9 +8,10 @@ python main.py \
 				-joint_space \
 				-valid_check \
 				-do_track \
+				-do_attention \
 				-model resnet50 \
 				-model_path /home/liu/pose_track/models/resnet50.pth \
-				-suffix do_track \
+				-suffix do_attention \
 				-data_name cmu \
 				-data_root_path /globalwork/data/cmu-panoptic \
 				-data_down_path /globalwork/liu/cmu_panoptic_down \

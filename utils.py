@@ -48,7 +48,7 @@ def to_heatmap(ausgabe, depth, num_joints, height, width):
 	
 	heatmap = heatmap.view(-1, num_joints, height * width * depth)
 
-	max_val = torch.max(heatmap, dim = 2, keepdim = True)[0]  # (batch_size, num_joints)
+	max_val = torch.max(heatmap, dim = 2, keepdim = True)[0]  # (batch_size, num_joints, 1)
 
 	heatmap = torch.exp(heatmap - max_val)
 
@@ -177,43 +177,7 @@ def least_square(A, b, weight):
 	return np.linalg.solve(np.dot(A.T, A), np.dot(A.T, b))
 
 
-def get_deter_cam(_spec_mat, _relat_cam, _valid, _intrinsics, weight):
-	'''
-	determines the reference point location at test time.
-
-	Args:
-		_spec_mat: (batch_size, num_joints, 2) estimated image coordinates
-		_relat_cam: (batch_size, num_joints, 3) estimated relative camera coordinates with respect to an unknown reference point
-		_valid: (batch_size, num_joints)
-		_intrinsics: (batch_size, 3, 3) camera intrinsics
-		weight: (num_joints,) importance of each joint
-
-	Returns:
-		(batch_size, num_joints, 3) estimation of camera coordinates
-	'''
-	deter_cams = []
-
-	batch_zip = xzip(_spec_mat, _relat_cam, _valid, _intrinsics)
-
-	for (spec_mat, relat_cam, valid, intrinsics) in batch_zip:
-
-		num_valid = np.sum(valid)
-
-		assert num_valid != 0 and num_valid != 1
-
-		normalized = np.hstack([spec_mat[valid], np.ones((num_valid, 1))])
-		normalized = np.matmul(normalized, np.linalg.inv(intrinsics).T)[:, :2]
-
-		A = np.hstack([np.vstack([np.eye(2, 2)] * num_valid), - normalized.reshape(-1, 1)])  # (num_valid x 2, 3)
-
-		b = (normalized * relat_cam[valid, 2:] - relat_cam[valid, :2]).reshape(-1)  # (num_valid x 2,)
-
-		deter_cams.append(relat_cam + least_square(A, b, weight[valid]))
-
-	return np.stack(deter_cams)
-
-
-def get_recon_cam(spec_mat, relat_cam, valid, intrinsics):
+def get_deter_cam(spec_mat, relat_cam, valid, intrinsics, attention):
 	'''
 	reconstructs the reference point location at train time.
 
@@ -222,6 +186,53 @@ def get_recon_cam(spec_mat, relat_cam, valid, intrinsics):
 		relat_cam: (batch_size, num_joints, 3) estimated relative camera coordinates with respect to an unknown reference point
 		valid: (batch_size, num_joints)
 		intrinsics: (batch_size, 3, 3) camera intrinsics
+		attention: (batch_size, num_joints) attention weights
+
+	Returns:
+		(batch_size, num_joints, 3) estimation of camera coordinates
+	'''
+	dim_batch, dim_joint = valid.shape
+
+	assert (np.sum(valid, axis = 1) != 0).all()
+	assert (np.sum(valid, axis = 1) != 1).all()
+
+	unproject = np.linalg.inv(intrinsics).transpose(0, 2, 1)
+
+	augment = np.ones((dim_batch, dim_joint, 1))  # (batch_size, num_joints, 1)
+
+	normalized = np.concatenate([spec_mat, augment], axis = -1)  # (batch_size, num_joints, 3)
+
+	normalized = np.einsum('bij,bjk->bik', normalized, unproject)[:, :, :2]  # (batch_size, num_joints, 2)
+
+	A = np.tile(np.eye(2), (dim_batch, dim_joint, 1))  # (batch_size, num_joints x 2, 2)
+
+	A = np.concatenate([A, - normalized.reshape(dim_batch, -1, 1)], axis = -1)  # (batch_size, num_joints x 2, 3)
+
+	b = (normalized * relat_cam[:, :, 2:] - relat_cam[:, :, :2]).reshape(dim_batch, -1, 1)  # (batch_size, num_joints x 2, 1)
+
+	attention = (valid * attention ** 0.5).reshape(-1, 1)  # (batch_size x num_joints, 1)
+	attention = np.tile(attention, (1, 2)).reshape(dim_batch, -1, 1)  # (batch_size, num_joints x 2, 1)
+
+	A = A * attention
+	b = b * attention
+
+	refer = np.linalg.inv(np.einsum('bij,bjk->bik', A.transpose(0, 2, 1), A))  # (batch_size, 3, 3)
+
+	refer = np.einsum('bij,bjk->bik', refer, np.einsum('bij,bjk->bik', A.transpose(0, 2, 1), b))  # (batch_size, 3, 1)
+
+	return relat_cam + refer.transpose(0, 2, 1)
+
+
+def get_recon_cam(spec_mat, relat_cam, valid, intrinsics, attention):
+	'''
+	reconstructs the reference point location at train time.
+
+	Args:
+		spec_mat: (batch_size, num_joints, 2) estimated image coordinates
+		relat_cam: (batch_size, num_joints, 3) estimated relative camera coordinates with respect to an unknown reference point
+		valid: (batch_size, num_joints)
+		intrinsics: (batch_size, 3, 3) camera intrinsics
+		attention: (batch_size, num_joints) attention weights
 
 	Returns:
 		(batch_size, num_joints, 3) estimation of camera coordinates
@@ -245,10 +256,11 @@ def get_recon_cam(spec_mat, relat_cam, valid, intrinsics):
 
 	b = (normalized * relat_cam[:, :, 2:] - relat_cam[:, :, :2]).view(dim_batch, -1, 1)  # (batch_size, num_joints x 2, 1)
 
-	valid = valid.float().view(-1, 1).repeat(1, 2).view(dim_batch, -1, 1)  # (batch_size, num_joints x 2, 1)
+	attention = (valid.float() * attention ** 0.5).view(-1, 1)  # (batch_size x num_joints, 1)
+	attention = attention.repeat(1, 2).view(dim_batch, -1, 1)  # (batch_size, num_joints x 2, 1)
 
-	A = A * valid
-	b = b * valid
+	A = A * attention
+	b = b * attention
 
 	refer = torch.inverse(torch.einsum('bij,bjk->bik', A.permute(0, 2, 1), A))  # (batch_size, 3, 3)
 

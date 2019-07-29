@@ -34,7 +34,7 @@ class BasicBlock(nn.Module):
             bias = False
         )
         self.bn1 = nn.BatchNorm2d(planes)
-        
+
         self.conv2 = nn.Conv2d(
             in_channels = planes,
             out_channels = planes,
@@ -133,6 +133,8 @@ class ResNet(nn.Module):
         stride3 = int(np.minimum(np.maximum(np.log2(args.stride), 3), 4) - 2)
         stride4 = int(np.minimum(np.maximum(np.log2(args.stride), 4), 5) - 3)
 
+        side_out = (args.side_in - 1) / args.stride + 1
+
         self.conv1 = nn.Conv2d(
             in_channels = 3,
             out_channels = 64,
@@ -164,12 +166,22 @@ class ResNet(nn.Module):
             kernel_size = 3,
             padding = 1
         )
+
         self.mat_regressor = nn.Conv2d(
             in_channels = 512 * block.expansion,
             out_channels = args.num_joints,
             kernel_size = 3,
             padding = 1
         ) if args.joint_space else None
+
+        self.atn_regressor = nn.Conv2d(
+            in_channels = 512 * block.expansion,
+            out_channels = args.num_joints,
+            kernel_size = 3,
+            padding = 1
+        ) if args.do_attention else None
+
+        self.atn_pool = nn.AvgPool2d((side_out, side_out))
 
     def _make_layer(self, block, planes, blocks, stride = 1, dilation = 1):
         downsample = None
@@ -204,8 +216,19 @@ class ResNet(nn.Module):
         x = self.layer3(x)
         x = self.layer4(x)
 
-        if self.mat_regressor:
+        if self.atn_regressor:
+            attention = self.atn_regressor(x)
+            attention = self.atn_pool(attention).squeeze(-1).squeeze(-1)
+
+            max_val = torch.max(attention, dim = -1, keepdim = True)[0]
+            attention = torch.exp(attention - max_val)
+            attention = attention / torch.sum(attention, dim = -1, keepdim = True)
+
+            return self.cam_regressor(x), self.mat_regressor(x), attention
+
+        elif self.mat_regressor:
             return self.cam_regressor(x), self.mat_regressor(x)
+
         else:
             return self.cam_regressor(x)
 
