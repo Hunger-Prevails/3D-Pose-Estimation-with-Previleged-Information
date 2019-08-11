@@ -13,16 +13,16 @@ from resnet import resnet18
 from resnet import resnet50
 
 def get_catalogue():
-    model_creators = dict();
+    model_creators = dict()
 
-    model_creators['resnet18'] = resnet18;
-    model_creators['resnet50'] = resnet50;
+    model_creators['resnet18'] = resnet18
+    model_creators['resnet50'] = resnet50
 
-    return model_creators;
+    return model_creators
 
 def create_model(args):
 
-    assert not (args.resume and args.pretrained)
+    assert not (args.resume and args.pretrain)
 
     state = None;
 

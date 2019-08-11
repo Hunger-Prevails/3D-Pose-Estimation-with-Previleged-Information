@@ -234,12 +234,7 @@ class ResNet(nn.Module):
 
 
 def resnet18(args):
-    """Constructs a ResNet-18 model.
-
-    Args:
-        pretrained (bool): If True, returns a model pre-trained on ImageNet
-    """
-    if args.pretrained:
+    if args.pretrain:
         model = ResNet(BasicBlock, [2, 2, 2, 2], args)
         toy_dict = torch.load(args.model_path)
         model_dict = model.state_dict()
@@ -260,12 +255,7 @@ def resnet18(args):
 
 
 def resnet50(args):
-    """Constructs a ResNet-50 model.
-
-    Args:
-        pretrained (bool): If True, returns a model pre-trained on ImageNet
-    """
-    if args.pretrained:
+    if args.pretrain:
         model = ResNet(Bottleneck, [3, 4, 6, 3], args)
         toy_dict = torch.load(args.model_path)
         model_dict = model.state_dict()

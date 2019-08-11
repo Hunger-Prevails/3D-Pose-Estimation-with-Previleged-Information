@@ -4,7 +4,7 @@ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/liu/Downloads/libjpeg-turbo/lib64
 python main.py \
 				-shuffle \
 				-save_record \
-				-pretrained \
+				-pretrain \
 				-joint_space \
 				-valid_check \
 				-do_track \

@@ -38,7 +38,6 @@ class Lecture(data.Dataset):
 
         assert data_group.phase == 'train'
 
-        self.crop_factor = args.crop_factor_train
         self.side_in = args.side_in
         self.do_perturbate = args.do_perturbate
         self.do_occlude = args.do_occlude
@@ -85,7 +84,7 @@ class Lecture(data.Dataset):
         box_verge = camera.world_to_image(box_verge)
         side_crop = np.linalg.norm(box_verge[0] - box_verge[1])
 
-        camera.zoom(self.side_in / side_crop * self.crop_factor)
+        camera.zoom(self.side_in / side_crop)
         camera.center_principal((self.side_in, self.side_in))
 
         if self.do_perturbate:
@@ -139,11 +138,9 @@ class Exam(data.Dataset):
         
         assert data_group.phase != 'train'
 
-        self.crop_factor = args.crop_factor_test
         self.side_in = args.side_in
         self.joint_space = args.joint_space
 
-        self.joint_info = data_group.joint_info
         self.samples = data_group.samples
         self.valid_check = args.valid_check
         self.thresh_valid = args.thresh_valid
@@ -175,7 +172,7 @@ class Exam(data.Dataset):
         box_verge = camera.world_to_image(box_verge)
         side_crop = np.linalg.norm(box_verge[0] - box_verge[1])
 
-        camera.zoom(self.side_in / side_crop * self.crop_factor)
+        camera.zoom(self.side_in / side_crop)
         camera.center_principal((self.side_in, self.side_in))
 
         world_coords = sample.body_pose
