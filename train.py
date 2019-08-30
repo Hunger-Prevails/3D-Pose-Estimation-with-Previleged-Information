@@ -432,7 +432,9 @@ class Trainer:
             attention = attention.cpu().numpy()
             relat_cam = relat_cam.cpu().numpy()
 
-            deter_cam = utils.get_deter_cam(spec_mat, relat_cam, valid_mask, intrinsics, attention)
+            essence = np.tile(self.data_info.essence, batch).reshape(batch, -1)
+
+            deter_cam = utils.get_deter_cam(spec_mat, relat_cam, essence, intrinsics, attention)
 
             deter_cam = np.einsum('Bij,BCj->BCi', back_rotation, deter_cam)
 
@@ -551,9 +553,11 @@ class Trainer:
             if self.do_track:
                 weight = np.tile(self.data_info.weight, batch).reshape(batch, -1)
 
+                essence = np.tile(self.data_info.essence, batch).reshape(batch, -1)
+
                 relat_cam = relat_cam.cpu().numpy()
 
-                deter_cam = utils.get_deter_cam(spec_mat, relat_cam, valid_mask, intrinsics, weight)
+                deter_cam = utils.get_deter_cam(spec_mat, relat_cam, essence, intrinsics, weight)
 
                 deter_cam = np.einsum('Bij,BCj->BCi', back_rotation, deter_cam)
 

@@ -16,21 +16,22 @@ class PoseSample:
 
 class PoseGroup:
 	
-	def __init__(self, phase, joint_info, samples):
+	def __init__(self, phase, data_info, samples):
 		assert phase in ['train', 'valid', 'test']
 
 		self.phase = phase
-		self.joint_info = joint_info
+		self.data_info = data_info
 		self.samples = samples
 
 
 class JointInfo:
-	def __init__(self, short_names, parent, mirror, key_index, weight = None):
+	def __init__(self, short_names, parent, mirror, key_index, weight = None, essence = None):
 		self.short_names = short_names
 		self.parent = parent
 		self.mirror = mirror
 		self.key_index = key_index
 		self.weight = weight
+		self.essence = essence
 
 
 def to_heatmap(ausgabe, depth, num_joints, height, width):

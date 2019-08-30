@@ -26,7 +26,8 @@ def get_cameras(json_file, cam_names):
 							np.matmul(np.array(cam['R']).T, - np.array(cam['t'])),
 							np.array(cam['R']),
 							np.array(cam['K']),
-							np.array(cam['distCoef'])
+							np.array(cam['distCoef']),
+							(0, -1, 0)
 					)
 				) for cam in cameras if cam['name'] in cam_names
 			]
@@ -138,9 +139,9 @@ def get_cmu_group(phase, args):
 	_mirror[np.array([name in mirror for name in short_names])] = np.array(map_mirror)
 	_parent[np.array([name in parent for name in short_names])] = np.array(map_parent)
 
-	essence = np.array([mapper[name] for name in short_names if name not in overlook])
+	essence = np.array([False if name in overlook else True for name in short_names])
 
-	joint_info = JointInfo(short_names, _parent, _mirror, mapper[base_joint], np.array(weight))
+	data_info = JointInfo(short_names, _parent, _mirror, mapper[base_joint], np.array(weight), essence)
 
 	sequences = dict(
 		train = [
@@ -228,4 +229,4 @@ def get_cmu_group(phase, args):
 	pool.join()
 	samples = [process.get() for process in processes]
 
-	return PoseGroup(phase, joint_info, [sample for sample in samples if sample])
+	return PoseGroup(phase, data_info, [sample for sample in samples if sample])

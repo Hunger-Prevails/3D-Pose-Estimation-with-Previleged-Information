@@ -29,7 +29,7 @@ def get_data_loader(args, phase):
         shuffle = shuffle,
         num_workers = args.workers,
         pin_memory = True
-    ), data_group.joint_info
+    ), data_group.data_info
 
 
 class Lecture(data.Dataset):
@@ -48,7 +48,7 @@ class Lecture(data.Dataset):
 
         self.occ_count = torch.load(os.path.join(self.occ_path, 'count.pth'))['count']
         
-        self.joint_info = data_group.joint_info
+        self.data_info = data_group.data_info
         self.samples = data_group.samples
         self.valid_check = args.valid_check
         self.thresh_valid = args.thresh_valid
@@ -95,7 +95,7 @@ class Lecture(data.Dataset):
 
         if np.random.rand() < 0.5:
             camera.horizontal_flip()
-            camera_coords = camera.world_to_camera(world_coords)[self.joint_info.mirror]
+            camera_coords = camera.world_to_camera(world_coords)[self.data_info.mirror]
         else:
             camera_coords = camera.world_to_camera(world_coords)
 
