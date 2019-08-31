@@ -6,10 +6,10 @@ from builtins import zip as xzip
 
 class PoseSample:
 	
-	def __init__(self, image_path, body_pose, image_coords, bbox, camera):
+	def __init__(self, image_path, body_pose, confids, bbox, camera):
 		self.image_path = image_path
 		self.body_pose = body_pose
-		self.image_coords = image_coords
+		self.confids = confids
 		self.bbox = bbox
 		self.camera = camera
 

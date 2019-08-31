@@ -110,24 +110,22 @@ def get_image_coords(seq_name, start_frame, end_frame, interval):
     cameras = dict([(cam['name'], cam) for cam in cameras if cam['name'] in cam_names])
 
     for frame in xrange(start_frame, end_frame, interval):
-        skeleton = os.path.join(pose_folder, 'body3DScene_' + str(frame).zfill(8) + '.json')
-        skeleton = json.load(open(skeleton))['bodies']
+        bodies = os.path.join(pose_folder, 'body3DScene_' + str(frame).zfill(8) + '.json')
+        bodies = json.load(open(bodies))['bodies']
         
-        if not skeleton:
+        if not bodies:
             continue
 
-        skeleton = np.array(skeleton[0]['joints19'])
-        skeleton = skeleton.reshape((-1,4)).transpose()  # (4 x 19)
+        for skeleton in bodies:
+            skeleton = np.array(skeleton['joints19'])
+            skeleton = skeleton.reshape((-1,4)).transpose()  # (4 x 19)
 
-        for name in cam_names:
+            for name in cam_names:
+                image_coord = projectPoints(skeleton[:3], cameras[name])  # (3 x 19)
 
-            image_coord = projectPoints(skeleton[:3], cameras[name])  # (3 x 19)
+                image_coord = np.concatenate((image_coord[:2], skeleton[3:]), axis = 0)  # (3 x 19)
 
-            # image_path = os.path.join(cam_folders[name], name + '_' + str(frame).zfill(8) + '.jpg')
-            # show_skeleton(image_path, image_coord, skeleton[3])
-
-            image_coord = np.concatenate((image_coord[:2], skeleton[3:]), axis = 0)  # (3 x 19)
-            image_coords[name].append(image_coord.transpose())  # (19 x 3)
+                image_coords[name].append(image_coord.transpose())  # (19 x 3)
 
         print 'frame [', start_frame, '-', frame, '|', end_frame, '] processed'
 
@@ -138,12 +136,16 @@ def get_image_coords(seq_name, start_frame, end_frame, interval):
         image_coord = np.stack(image_coords[name]).tolist()
 
         with open(save_path, 'w') as file:
-            print >> file, json.dumps(
-                            dict(
-                                start_frame = start_frame,
-                                end_frame = end_frame,
-                                interval = interval,
-                                image_coord = image_coord))
+            file.write(
+                json.dumps(
+                    dict(
+                        start_frame = start_frame,
+                        end_frame = end_frame,
+                        interval = interval,
+                        image_coord = image_coord
+                    )
+                )
+            )
             file.close()
 
 

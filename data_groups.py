@@ -79,10 +79,6 @@ def make_sample(data_sample, data_params):
 
 	new_bbox = np.concatenate((new_bbox, bbox[2:] * scale_factor))
 
-	new_coord = cameralib.reproject_points(image_coord[:, :2], camera, new_camera)
-
-	new_coord = np.concatenate((new_coord, image_coord[:, 2:]), axis = 1)
-
 	if not os.path.exists(new_path):
 
 		image = jpeg4py.JPEG(image_path).decode()
@@ -91,7 +87,7 @@ def make_sample(data_sample, data_params):
 
 		cv2.imwrite(new_path, new_image[:, :, ::-1])
 
-	return PoseSample(new_path, body_pose, new_coord, new_bbox, new_camera)
+	return PoseSample(new_path, body_pose, image_coord[:, 2], new_bbox, new_camera)
 
 
 def coord_to_box(image_coord, box_margin, border):
@@ -198,32 +194,39 @@ def get_cmu_group(phase, args):
 
 		for frame_idx, frame in enumerate(xrange(start_frame, end_frame, interval)):
 
-			skeleton = os.path.join(root_skeleton, 'body3DScene_' + str(frame).zfill(8) + '.json')
-			skeleton = json.load(open(skeleton))['bodies']
-			if not skeleton:
+			bodies = os.path.join(root_skeleton, 'body3DScene_' + str(frame).zfill(8) + '.json')
+			bodies = json.load(open(bodies))['bodies']
+
+			if not bodies:
 				continue
 
-			body_pose = np.array(skeleton[0]['joints19']).reshape((-1, 4))[:, :3]
+			for body_pose in bodies:
 
-			for cam_name in cam_names:
+				body_pose = np.array(body_pose['joints19']).reshape((-1, 4))[:, :3]
 
-				if (frame - start_frame) % frame_step[phase] != 0:
-					continue
+				for cam_name in cam_names:
 
-				if not os.path.exists(down_folders[cam_name]):
-					os.mkdir(down_folders[cam_name])
+					if (frame - start_frame) % frame_step[phase] != 0:
+						continue
 
-				image_path = os.path.join(cam_folders[cam_name], cam_name + '_' + str(frame).zfill(8) + '.jpg')
-				image_coord = np.array(cam_files[cam_name]['image_coord'][pose_idx])
+					image_path = os.path.join(cam_folders[cam_name], cam_name + '_' + str(frame).zfill(8) + '.jpg')
 
-				data_sample = (image_path, image_coord, body_pose, cameras[cam_name])
-				data_params = (args.side_in, args.random_zoom, args.box_margin, essence, down_folders[cam_name])
+					if not os.path.exists(image_path):
+						continue
 
-				processes.append(pool.apply_async(func = make_sample, args = (data_sample, data_params)))
+					if not os.path.exists(down_folders[cam_name]):
+						os.mkdir(down_folders[cam_name])
+
+					image_coord = np.array(cam_files[cam_name]['image_coord'][pose_idx])
+
+					data_sample = (image_path, image_coord, body_pose, cameras[cam_name])
+					data_params = (args.side_in, args.random_zoom, args.box_margin, essence, down_folders[cam_name])
+
+					processes.append(pool.apply_async(func = make_sample, args = (data_sample, data_params)))
+
+				pose_idx += 1
 
 			print 'collecting samples [', str(frame_idx) + '/' + str((end_frame - start_frame) / interval), '] sequence', sequence
-
-			pose_idx += 1
 
 	pool.close()
 	pool.join()
