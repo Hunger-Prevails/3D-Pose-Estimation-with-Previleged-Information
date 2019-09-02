@@ -4,7 +4,6 @@ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/liu/Downloads/libjpeg-turbo/lib64
 python main.py \
 				-shuffle \
 				-val_only \
-				-valid_check \
 				-joint_space \
 				-do_track \
 				-do_attention \
@@ -13,7 +12,7 @@ python main.py \
 				-suffix do_attention \
 				-data_name cmu \
 				-data_root_path /globalwork/data/cmu-panoptic \
-				-data_down_path /globalwork/liu/cmu_panoptic_down \
+				-data_down_path /globalwork/liu/cmu_down \
 				-comp_name mpii \
 				-comp_root_path /globalwork/data/mpii \
 				-comp_down_path /globalwork/liu/mpii_down \

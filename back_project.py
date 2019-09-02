@@ -6,7 +6,7 @@ import sys
 import os
 
 
-data_path = '/globalwork/liu/cmu_panoptic'
+data_path = '/globalwork/data/cmu-panoptic'
 
 
 def projectPoints(X, cam):

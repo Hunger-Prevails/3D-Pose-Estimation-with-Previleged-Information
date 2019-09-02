@@ -13,7 +13,7 @@ parser.add_argument('-flip_test', action='store_true', help='whether to perform 
 parser.add_argument('-do_perturbate', action='store_true', help='whether to perform perturbation augmentation')
 parser.add_argument('-do_occlude', action='store_true', help='whether to perform occlusion augmentation')
 parser.add_argument('-do_complement', action='store_true', help='whether to use complement dataset')
-parser.add_argument('-valid_check', action='store_true', help='whether to threshold uncertain keypoints off')
+parser.add_argument('-confid_filter', action='store_true', help='whether to threshold uncertain keypoints off')
 parser.add_argument('-joint_space', action='store_true', help='whether to allow joint-space train data')
 parser.add_argument('-do_track', action='store_true', help='whether to track cam coords via least square optim')
 parser.add_argument('-do_attention', action='store_true', help='whether to learn weights for reference joint regression')
@@ -41,6 +41,7 @@ parser.add_argument('-num_processes', default=6, type=int, help='Number of subpr
 parser.add_argument('-side_in', default=257, type=int, help='side of input image')
 parser.add_argument('-stride', default=16, type=int, help='stride of network for train')
 parser.add_argument('-num_joints', default=19, type=int, help='number of joints in the dataset')
+parser.add_argument('-num_valid', default=5, type=int, help='minimum number of valid joints for a valid sample')
 parser.add_argument('-depth', default=16, type=int, help='depth side of volumetric heatmap')
 
 # train options
@@ -53,7 +54,7 @@ parser.add_argument('-comp_loss_weight', default=0.2, type=float, help='loss wei
 parser.add_argument('-depth_range', default=100.0, type=float, help='depth range of prediction')
 
 # evaluation options
-parser.add_argument('-thresh_valid', default=0.1, type=float, help='threshold for a confident annotation')
+parser.add_argument('-thresh_confid', default=0.1, type=float, help='threshold for a confident annotation')
 parser.add_argument('-thresh_solid', default=0.5, type=float, help='threshold for a solid estimation')
 parser.add_argument('-thresh_close', default=2.0, type=float, help='threshold for a close estimation')
 parser.add_argument('-thresh_rough', default=5.0, type=float, help='threshold for a rough estimation')

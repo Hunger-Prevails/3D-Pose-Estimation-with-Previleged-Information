@@ -105,15 +105,10 @@ class Lecture(data.Dataset):
         image = cameralib.reproject_image(image, sample.camera, camera, (self.side_in, self.side_in))
         image = self.transform(self.occlusion_augment(image)) if self.do_occlude else self.transform(image)
 
-        if self.valid_check:
-            valid_mask = np.uint8(self.thresh_valid <= sample.confids)
-        else:
-            valid_mask = np.uint8(sample.confids != -1)
-
         if self.joint_space:
-            return image, camera_coords, image_coords, valid_mask, camera.intrinsics
+            return image, camera_coords, image_coords, np.uint8(sample.valid), camera.intrinsics
         else:
-            return image, camera_coords, valid_mask
+            return image, camera_coords, np.uint8(sample.valid)
 
     def occlusion_augment(self, image):
         random_value = np.random.uniform()
@@ -186,15 +181,10 @@ class Exam(data.Dataset):
 
         back_rotation = np.matmul(sample.camera.R, camera.R.T)
 
-        if self.valid_check:
-            valid_mask = np.uint8(self.thresh_valid <= sample.confids)
-        else:
-            valid_mask = np.uint8(sample.confids != -1)
-
         if self.joint_space:
-            return image, camera_coords, image_coords, back_rotation, valid_mask, camera.intrinsics
+            return image, camera_coords, image_coords, back_rotation, np.uint8(sample.valid), camera.intrinsics
         else:
-            return image, camera_coords, back_rotation, valid_mask
+            return image, camera_coords, back_rotation, np.uint8(sample.valid)
 
     def __getitem__(self, index):
         return self.parse_sample(self.samples[index])

@@ -6,7 +6,6 @@ python main.py \
 				-save_record \
 				-pretrain \
 				-joint_space \
-				-valid_check \
 				-do_track \
 				-do_attention \
 				-model resnet50 \
@@ -14,7 +13,7 @@ python main.py \
 				-suffix do_attention \
 				-data_name cmu \
 				-data_root_path /globalwork/data/cmu-panoptic \
-				-data_down_path /globalwork/liu/cmu_panoptic_down \
+				-data_down_path /globalwork/liu/cmu_down \
 				-comp_name mpii \
 				-comp_root_path /globalwork/data/mpii \
 				-comp_down_path /globalwork/liu/mpii_down \
