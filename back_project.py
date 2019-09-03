@@ -61,7 +61,7 @@ def show_skeleton(image, image_coord, confidence, message = '', bbox = None):
             np.array(body_edges).reshape(-1, 1)
         ]
     )
-    fig = plt.subplot(1, 3, 1)
+    fig = plt.subplot(1, 1, 1)
     plt.title(message + ':' + str(image.shape))
     plt.imshow(image)
     currentAxis = plt.gca()

@@ -5,6 +5,8 @@ python main.py \
 				-shuffle \
 				-val_only \
 				-joint_space \
+				-confid_filter \
+				-static_filter \
 				-do_track \
 				-do_attention \
 				-model resnet50 \

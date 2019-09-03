@@ -6,6 +6,8 @@ python main.py \
 				-save_record \
 				-pretrain \
 				-joint_space \
+				-confid_filter \
+				-static_filter \
 				-do_track \
 				-do_attention \
 				-model resnet50 \

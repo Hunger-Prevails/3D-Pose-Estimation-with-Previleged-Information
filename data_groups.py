@@ -52,20 +52,16 @@ def make_sample(paths, annos, args):
 	cond1 = np.all(0 <= image_coord[:, :2], axis = 1)
 	cond2 = np.all(image_coord[:, :2] < border, axis = 1)
 
-	confid = image_coord[:, 2]
-	confid[~(cond1 & cond2)] = -1
+	contains = cond1 & cond2 & (image_coord[:, 2] != -1)
 
-	valid = confid != -1
+	valid = (args.thresh_confid <= image_coord[:, 2]) & contains if args.confid_filter else contains
 
 	if np.sum(valid) < args.num_valid:
 		return None
 
-	bbox = coord_to_box(image_coord[valid, :2], args.box_margin, border)
+	bbox = coord_to_box(image_coord[contains, :2], args.box_margin, border)
 
-	if args.confid_filter:
-		valid = args.thresh_confid <= confid
-
-	expand_side = np.sum(bbox[2:] ** 2) ** 0.5
+	expand_side = np.sum((bbox[2:] / args.random_zoom) ** 2) ** 0.5
 
 	box_center = bbox[:2] + bbox[2:] / 2
 
@@ -143,17 +139,50 @@ def get_cmu_group(phase, args):
 
 	sequences = dict(
 		train = [
-			'171204_pose1',
-			'171204_pose2',
 			'171026_pose1',
 			'171026_pose2',
+			'171026_pose3',
+			'171204_pose1',
+			'171204_pose2',
+			'171204_pose3',
 			'171204_pose4',
 			'171204_pose5',
-			'171204_pose6'],
-		valid = [
-			'171204_pose3'],
-		test = [
-			'171026_pose3']
+			'171204_pose6',
+			'170221_haggling_b1',
+			'170221_haggling_b2',
+			'170221_haggling_b3',
+			'170221_haggling_m1',
+			'170221_haggling_m2',
+			'170221_haggling_m3',
+			'170224_haggling_a2',
+			'170224_haggling_a3',
+			'170224_haggling_b1',
+			'170224_haggling_b2',
+			'170224_haggling_b3',
+			'170228_haggling_a1',
+			'170228_haggling_a2',
+			'170228_haggling_a3',
+			'170228_haggling_b1',
+			'170228_haggling_b2',
+			'170228_haggling_b3',
+			'170404_haggling_a1',
+			'170404_haggling_a2',
+			'170404_haggling_a3',
+			'170404_haggling_b1',
+			'170404_haggling_b2',
+			'170404_haggling_b3',
+			'170407_haggling_a1',
+			'170407_haggling_a2',
+			'170407_haggling_a3',
+			'170407_haggling_b1',
+			'170407_haggling_b2',
+			'170407_haggling_b3',
+			'160224_haggling1',
+			'160226_haggling1',
+			'160422_haggling1',
+			'161202_haggling1'],
+		valid = [],
+		test = []
 	)
 	frame_step = dict(
 		train = 10,
@@ -200,6 +229,8 @@ def get_cmu_group(phase, args):
 
 		root_skeleton = os.path.join(root_seq, 'hdPose3d_stage1_coco19')
 
+		prev_pose = dict()
+
 		for frame_idx, frame in enumerate(xrange(start_frame, end_frame, interval)):
 
 			bodies = os.path.join(root_skeleton, 'body3DScene_' + str(frame).zfill(8) + '.json')
@@ -210,12 +241,23 @@ def get_cmu_group(phase, args):
 
 			for body_pose in bodies:
 
+				if (frame - start_frame) % frame_step[phase] != 0:
+					pose_idx += 1
+					continue
+
+				body_id = body_pose['id']
+
 				body_pose = np.array(body_pose['joints19']).reshape((-1, 4))[:, :3]
 
-				for cam_name in cam_names:
+				if args.static_filter and body_id in prev_pose:
 
-					if (frame - start_frame) % frame_step[phase] != 0:
+					displacement = np.linalg.norm(prev_pose[body_id] - body_pose, axis = 1)
+
+					if np.all(displacement < args.thresh_static):
+						pose_idx += 1
 						continue
+
+				for cam_name in cam_names:
 
 					image_path = os.path.join(cam_folders[cam_name], cam_name + '_' + str(frame).zfill(8) + '.jpg')
 
@@ -231,6 +273,8 @@ def get_cmu_group(phase, args):
 					annos = (image_coord, body_pose, cameras[cam_name])
 
 					processes.append(pool.apply_async(func = make_sample, args = (paths, annos, args)))
+
+				prev_pose[body_id] = body_pose
 
 				pose_idx += 1
 
