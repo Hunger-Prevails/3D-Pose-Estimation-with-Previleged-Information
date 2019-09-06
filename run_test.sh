@@ -4,19 +4,19 @@ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/liu/Downloads/libjpeg-turbo/lib64
 python main.py \
 				-shuffle \
 				-val_only \
-				-joint_space \
 				-confid_filter \
 				-static_filter \
+				-joint_space \
 				-do_track \
 				-do_attention \
 				-model resnet50 \
 				-model_path /home/liu/pose_track/models/resnet50.pth \
 				-suffix do_attention \
 				-data_name cmu \
-				-data_root_path /globalwork/data/cmu-panoptic \
-				-data_down_path /globalwork/liu/cmu_down \
 				-comp_name mpii \
+				-data_root_path /globalwork/data/cmu-panoptic \
 				-comp_root_path /globalwork/data/mpii \
+				-data_down_path /globalwork/liu/cmu_down \
 				-comp_down_path /globalwork/liu/mpii_down \
 				-occluder_path /globalwork/liu/pascal_occluders \
 				-save_path /globalwork/liu/pose_track \

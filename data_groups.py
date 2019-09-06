@@ -44,7 +44,7 @@ def make_sample(paths, annos, args):
 	returns
 		pose sample with path to down-scaled image and corresponding box/image_coord
 	'''
-	image_path, down_path = paths
+	image_path, new_path = paths
 	image_coord, body_pose, camera = annos
 
 	border = np.array([1920, 1080])
@@ -59,6 +59,13 @@ def make_sample(paths, annos, args):
 	if np.sum(valid) < args.num_valid:
 		return None
 
+	# from back_project import show_skeleton
+
+	# print valid
+	# print image_coord[:, 2]
+
+	# show_skeleton(image_path, image_coord.T, valid)
+
 	bbox = coord_to_box(image_coord[contains, :2], args.box_margin, border)
 
 	expand_side = np.sum((bbox[2:] / args.random_zoom) ** 2) ** 0.5
@@ -72,8 +79,6 @@ def make_sample(paths, annos, args):
 	new_camera = copy.deepcopy(camera)
 	new_camera.shift_to_center(box_center, (expand_side, expand_side))
 	new_camera.scale_output(scale_factor)
-
-	new_path = os.path.join(down_path, os.path.basename(image_path))
 
 	new_bbox = cameralib.reproject_points(bbox[None, :2], camera, new_camera)[0]
 
@@ -139,15 +144,6 @@ def get_cmu_group(phase, args):
 
 	sequences = dict(
 		train = [
-			'171026_pose1',
-			'171026_pose2',
-			'171026_pose3',
-			'171204_pose1',
-			'171204_pose2',
-			'171204_pose3',
-			'171204_pose4',
-			'171204_pose5',
-			'171204_pose6',
 			'170221_haggling_b1',
 			'170221_haggling_b2',
 			'170221_haggling_b3',
@@ -177,12 +173,24 @@ def get_cmu_group(phase, args):
 			'170407_haggling_b1',
 			'170407_haggling_b2',
 			'170407_haggling_b3',
+			'171026_pose1',
+			'171026_pose2',
+			'171026_pose3',
+			'171204_pose1',
+			'171204_pose2',
+			'171204_pose3',
+			'171204_pose4',
+			'171204_pose5',
+			'171204_pose6'
+		],
+		valid = [
 			'160224_haggling1',
-			'160226_haggling1',
+			'160226_haggling1'
+		],
+		test = [
 			'160422_haggling1',
-			'161202_haggling1'],
-		valid = [],
-		test = []
+			'161202_haggling1'
+		]
 	)
 	frame_step = dict(
 		train = 10,
@@ -237,6 +245,7 @@ def get_cmu_group(phase, args):
 			bodies = json.load(open(bodies))['bodies']
 
 			if not bodies:
+				print 'empty frame skipped'
 				continue
 
 			for body_pose in bodies:
@@ -254,6 +263,7 @@ def get_cmu_group(phase, args):
 					displacement = np.linalg.norm(prev_pose[body_id] - body_pose, axis = 1)
 
 					if np.all(displacement < args.thresh_static):
+						print 'static pose skipped', body_id
 						pose_idx += 1
 						continue
 
@@ -269,7 +279,9 @@ def get_cmu_group(phase, args):
 
 					image_coord = np.array(cam_files[cam_name]['image_coord'][pose_idx])
 
-					paths = (image_path, down_path[cam_name])
+					new_path = os.path.join(down_path[cam_name], str(frame) + '.' + str(body_id) + '.jpg')
+
+					paths = (image_path, new_path)
 					annos = (image_coord, body_pose, cameras[cam_name])
 
 					processes.append(pool.apply_async(func = make_sample, args = (paths, annos, args)))

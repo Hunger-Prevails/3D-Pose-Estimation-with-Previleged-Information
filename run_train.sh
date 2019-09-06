@@ -5,23 +5,22 @@ python main.py \
 				-shuffle \
 				-save_record \
 				-pretrain \
-				-joint_space \
 				-confid_filter \
 				-static_filter \
+				-joint_space \
 				-do_track \
 				-do_attention \
 				-model resnet50 \
 				-model_path /home/liu/pose_track/models/resnet50.pth \
-				-suffix do_attention \
+				-suffix do_attention_new \
 				-data_name cmu \
-				-data_root_path /globalwork/data/cmu-panoptic \
-				-data_down_path /globalwork/liu/cmu_down \
 				-comp_name mpii \
+				-data_root_path /globalwork/data/cmu-panoptic \
 				-comp_root_path /globalwork/data/mpii \
+				-data_down_path /globalwork/liu/cmu_down \
 				-comp_down_path /globalwork/liu/mpii_down \
 				-occluder_path /globalwork/liu/pascal_occluders \
 				-save_path /globalwork/liu/pose_track \
 				-criterion SmoothL1 \
-				-n_epochs 30 \
 				-batch_size 64 \
 				-n_cudas 2

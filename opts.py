@@ -4,20 +4,21 @@ parser = argparse.ArgumentParser(description='Parser for all the training option
 
 # bool options
 parser.add_argument('-shuffle', action='store_true', help='Reshuffle data at each epoch')
+parser.add_argument('-half_acc', action='store_true', help='whether to use float16 for speed-up')
 parser.add_argument('-save_record', action='store_true', help='Path to save train record')
 parser.add_argument('-test_only', action='store_true', help='only performs test')
 parser.add_argument('-val_only', action='store_true', help='only performs validation')
 parser.add_argument('-pretrain', action='store_true', help='whether to load an imagenet pre-train')
 parser.add_argument('-resume', action='store_true', help='whether to continue from a previous checkpoint')
 parser.add_argument('-flip_test', action='store_true', help='whether to perform flip test')
-parser.add_argument('-do_perturbate', action='store_true', help='whether to perform perturbation augmentation')
-parser.add_argument('-do_occlude', action='store_true', help='whether to perform occlusion augmentation')
-parser.add_argument('-do_complement', action='store_true', help='whether to use complement dataset')
 parser.add_argument('-confid_filter', action='store_true', help='whether to threshold uncertain keypoints off')
 parser.add_argument('-static_filter', action='store_true', help='whether to threshold static frames off')
 parser.add_argument('-joint_space', action='store_true', help='whether to allow joint-space train data')
 parser.add_argument('-do_track', action='store_true', help='whether to track cam coords via least square optim')
 parser.add_argument('-do_attention', action='store_true', help='whether to learn weights for reference joint regression')
+parser.add_argument('-do_perturbate', action='store_true', help='whether to perform perturbation augmentation')
+parser.add_argument('-do_occlude', action='store_true', help='whether to perform occlusion augmentation')
+parser.add_argument('-do_complement', action='store_true', help='whether to use complement dataset')
 
 # required options
 parser.add_argument('-model', required=True, help='Backbone architecture')
@@ -48,6 +49,7 @@ parser.add_argument('-depth', default=16, type=int, help='depth side of volumetr
 # train options
 parser.add_argument('-learn_rate', default=1e-4, type=float, help='Base learning rate for train')
 parser.add_argument('-grad_norm', default=5.0, type=float, help='norm for gradient clip')
+parser.add_argument('-grad_scaling', default=32.0, type=float, help='magnitude of loss scaling when performing float16 computation')
 parser.add_argument('-momentum', default=0.9, type=float, help='Momentum for training')
 parser.add_argument('-weight_decay', default=4e-5, type=float, help='Weight decay for training')
 parser.add_argument('-box_margin', default=0.6, type=float, help='factor for generating pseudo bbox from image coords')

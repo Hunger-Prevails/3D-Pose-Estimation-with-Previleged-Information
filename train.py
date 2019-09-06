@@ -13,10 +13,12 @@ class Trainer:
 
     def __init__(self, args, model, data_info):
 
+        assert args.half_acc <= args.n_cudas
+
         self.model = model
         self.data_info = data_info
 
-        self.list_params = [model.parameters()]
+        self.list_params = list(model.parameters())
 
         if args.do_complement:
             self.alpha = args.comp_loss_weight
@@ -28,7 +30,19 @@ class Trainer:
             if args.n_cudas:
                 self.comp_linear = self.comp_linear.cuda()
 
-            self.list_params.append(self.comp_linear.parameters())
+            self.list_params += list(self.comp_linear.parameters())
+
+        if args.half_acc:
+            self.copy_params = [param.clone().detach() for param in self.list_params]
+            self.model = self.model.half()
+
+            for param in self.copy_params:
+                param.requires_grad = True
+                param.grad = param.data.new_zeros(param.size())
+
+            self.optimizer = optim.Adam(self.copy_params, args.learn_rate, weight_decay = args.weight_decay)
+        else:
+            self.optimizer = optim.Adam(self.list_params, args.learn_rate, weight_decay = args.weight_decay)
 
         self.n_cudas = args.n_cudas
         self.depth = args.depth
@@ -36,8 +50,9 @@ class Trainer:
         self.side_in = args.side_in
         self.stride = args.stride
         self.depth_range = args.depth_range
-        self.flip_test = args.flip_test
 
+        self.half_acc = args.half_acc
+        self.flip_test = args.flip_test
         self.joint_space = args.joint_space
         self.do_track = args.do_track
         self.do_attention = args.do_attention
@@ -45,14 +60,13 @@ class Trainer:
         self.learn_rate = args.learn_rate
         self.num_epochs = args.n_epochs
         self.grad_norm = args.grad_norm
+        self.grad_scaling = args.grad_scaling
 
         self.thresh = dict(
             solid = args.thresh_solid,
             close = args.thresh_close,
             rough = args.thresh_rough
         )
-        self.optimizer = optim.Adam(self.get_params(), args.learn_rate, weight_decay = args.weight_decay)
-
         self.criterion = nn.__dict__[args.criterion + 'Loss'](reduction = 'mean')
 
         if args.n_cudas:
@@ -74,19 +88,26 @@ class Trainer:
         for i, (image, true_cam, true_mat, valid_mask, intrinsics) in enumerate(data_loader):
 
             if self.n_cudas:
-                image = image.to(cuda_device)
+                image = image.half().to(cuda_device) if self.half_acc else image.to(cuda_device)
 
                 true_cam = true_cam.to(cuda_device)
 
                 true_mat = true_mat.to(cuda_device)
 
-                valid_mask = valid_mask.to(cuda_device)
-
                 intrinsics = intrinsics.to(cuda_device)
+
+                valid_mask = valid_mask.to(cuda_device)
 
             batch = image.size(0)
 
             cam_feat, mat_feat, attention = self.model(image)
+
+            if self.half_acc:
+                cam_feat = cam_feat.float()
+
+                mat_feat = mat_feat.float()
+
+                attention = attention.float()
 
             heat_mat = mat_utils.to_heatmap(mat_feat, self.num_joints, side_out, side_out)
 
@@ -121,11 +142,41 @@ class Trainer:
 
                 loss = loss * 0.5 + recon_loss
 
-            self.optimizer.zero_grad()
-            loss.backward()
+            if self.half_acc:
+                loss *= self.grad_scaling
 
-            nn.utils.clip_grad_norm_(self.get_params(), self.grad_norm)
-            self.optimizer.step()
+                for h_param in self.list_params:
+
+                    if h_param.grad is None:
+                        continue
+
+                    h_param.grad.detach_()
+                    h_param.grad.zero_()
+
+                loss.backward()
+
+                self.optimizer.zero_grad()
+
+                for c_param, h_param in zip(self.copy_params, self.list_params):
+
+                    if h_param.grad is None:
+                        continue
+
+                    c_param.grad.copy_(h_param.grad)
+                    c_param.grad /= self.grad_scaling
+
+                nn.utils.clip_grad_norm_(self.copy_params, self.grad_norm)
+                self.optimizer.step()
+
+                for c_param, h_param in zip(self.copy_params, self.list_params):
+                    h_param.data.copy_(c_param.data)
+
+            else:
+                self.optimizer.zero_grad()
+                loss.backward()
+
+                nn.utils.clip_grad_norm_(self.list_params, self.grad_norm)
+                self.optimizer.step()
 
             total += batch
 
@@ -152,7 +203,7 @@ class Trainer:
         return dict(cam_train_loss = cam_loss_avg, mat_train_loss = mat_loss_avg, recon_train_loss = recon_loss_avg)
 
 
-    def joint_train(self, epoch, data_loader, comp_loader, cuda_device):
+    def joint_train(self, epoch, data_loader, cuda_device):
         n_batches = len(data_loader)
 
         cam_loss_avg = 0
@@ -163,8 +214,6 @@ class Trainer:
         side_out = (self.side_in - 1) / self.stride + 1
 
         do_track = self.do_track and (epoch != 1)
-
-        comp_data_iter = iter(comp_loader) if comp_loader else None
 
         for i, (image, true_cam, true_mat, valid_mask, intrinsics) in enumerate(data_loader):
 
@@ -205,35 +254,7 @@ class Trainer:
 
             cam_loss_avg += cam_loss.item() * batch
 
-            loss = cam_loss + (1 - self.alpha) * mat_loss if comp_loader else cam_loss + mat_loss
-
-            if comp_loader:
-                try:
-                    comp_image, comp_true_mat, comp_valid_mask = next(comp_data_iter)
-                except:
-                    comp_data_iter = iter(comp_loader)
-                    comp_image, comp_true_mat, comp_valid_mask = next(comp_data_iter)
-
-                if self.n_cudas:
-                    comp_image = comp_image.to(cuda_device)
-
-                    comp_true_mat = comp_true_mat.to(cuda_device)
-
-                    comp_valid_mask = comp_valid_mask.unsqueeze(-1).to(cuda_device)
-
-                comp_batch = comp_image.size(0)
-
-                comp_cam_feat, comp_mat_feat = self.model(comp_image)
-
-                comp_heat_mat = mat_utils.to_heatmap(comp_mat_feat, self.num_joints, side_out, side_out)
-
-                comp_spec_mat = mat_utils.decode(comp_heat_mat, self.side_in).permute(0, 2, 1)
-
-                comp_spec_mat = self.comp_linear(comp_spec_mat).permute(0, 2, 1)
-
-                comp_loss = self.criterion(comp_spec_mat.view(-1, 2)[comp_valid_mask.view(-1)], comp_true_mat.view(-1, 2)[comp_valid_mask.view(-1)])
-
-                loss += self.alpha * comp_loss
+            loss = cam_loss + mat_loss
 
             if do_track:
                 recon_cam = utils.get_recon_cam(spec_mat, relat_cam, valid_mask, intrinsics)
@@ -247,7 +268,7 @@ class Trainer:
             self.optimizer.zero_grad()
             loss.backward()
 
-            nn.utils.clip_grad_norm_(self.get_params(), self.grad_norm)
+            nn.utils.clip_grad_norm_(self.list_params, self.grad_norm)
             self.optimizer.step()
 
             total += batch
@@ -255,9 +276,6 @@ class Trainer:
             message = '| train Epoch[%d] [%d/%d]' % (epoch, i, n_batches)
             message += '  Cam Loss: %1.4f' % (cam_loss.item())
             message += '  Mat Loss: %1.4f' % (mat_loss.item())
-
-            if comp_loader:
-                message += '  Comp Loss: %1.4f' % (comp_loss.item())
 
             if do_track:
                 message += '  Recon Loss: %1.4f' % (recon_loss.item())
@@ -316,7 +334,7 @@ class Trainer:
             self.optimizer.zero_grad()
             loss.backward()
 
-            nn.utils.clip_grad_norm_(self.model.parameters(), self.grad_norm)
+            nn.utils.clip_grad_norm_(self.list_params, self.grad_norm)
             self.optimizer.step()
 
             total += batch
@@ -338,7 +356,7 @@ class Trainer:
         if self.do_attention:
             return self.atn_train(epoch, data_loader, torch.device('cuda'))
         elif self.joint_space:
-            return self.joint_train(epoch, data_loader, comp_loader, torch.device('cuda'))
+            return self.joint_train(epoch, data_loader, torch.device('cuda'))
         else:
             return self.cam_train(epoch, data_loader, torch.device('cuda'))
 
@@ -359,7 +377,7 @@ class Trainer:
         for i, (image, true_cam, true_mat, back_rotation, valid_mask, intrinsics) in enumerate(test_loader):
 
             if self.n_cudas:
-                image = image.to(cuda_device)
+                image = image.half().to(cuda_device) if self.half_acc else image.to(cuda_device)
 
                 true_cam = true_cam.to(cuda_device)
 
@@ -371,6 +389,13 @@ class Trainer:
 
             with torch.no_grad():
                 cam_feat, mat_feat, attention = self.model(image)
+
+                if self.half_acc:
+                    cam_feat = cam_feat.float()
+
+                    mat_feat = mat_feat.float()
+
+                    attention = attention.float()
 
                 heat_mat = mat_utils.to_heatmap(mat_feat, self.num_joints, side_out, side_out)
 
@@ -686,9 +711,3 @@ class Trainer:
 
         for group in self.optimizer.param_groups:
             group['lr'] = learn_rate
-
-
-    def get_params(self):
-        for params in self.list_params:
-            for param in params:
-                yield param

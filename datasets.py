@@ -50,8 +50,6 @@ class Lecture(data.Dataset):
         
         self.data_info = data_group.data_info
         self.samples = data_group.samples
-        self.valid_check = args.valid_check
-        self.thresh_valid = args.thresh_valid
 
         self.mean = [0.485, 0.456, 0.406]
         self.dev = [0.229, 0.224, 0.225]
@@ -137,8 +135,6 @@ class Exam(data.Dataset):
         self.joint_space = args.joint_space
 
         self.samples = data_group.samples
-        self.valid_check = args.valid_check
-        self.thresh_valid = args.thresh_valid
 
         self.mean = [0.485, 0.456, 0.406]
         self.dev = [0.229, 0.224, 0.225]
