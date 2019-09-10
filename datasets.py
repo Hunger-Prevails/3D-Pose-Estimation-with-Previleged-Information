@@ -94,6 +94,7 @@ class Lecture(data.Dataset):
         if np.random.rand() < 0.5:
             camera.horizontal_flip()
             camera_coords = camera.world_to_camera(world_coords)[self.data_info.mirror]
+            sample.valid = sample.valid[self.data_info.mirror]
         else:
             camera_coords = camera.world_to_camera(world_coords)
 

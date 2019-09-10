@@ -23,6 +23,7 @@ def get_cameras(json_file, cam_names):
 				(
 					cam['name'],
 					cameralib.Camera(
+							cam['name'],
 							np.matmul(np.array(cam['R']).T, - np.array(cam['t'])),
 							np.array(cam['R']),
 							np.array(cam['K']),
@@ -59,12 +60,11 @@ def make_sample(paths, annos, args):
 	if np.sum(valid) < args.num_valid:
 		return None
 
-	# from back_project import show_skeleton
+	mass_center = np.array([np.mean(body_pose[valid, 0]), np.mean(body_pose[valid, 2])])
+	entry_center = np.array([30.35, -254.3])
 
-	# print valid
-	# print image_coord[:, 2]
-
-	# show_skeleton(image_path, image_coord.T, valid)
+	if np.linalg.norm(mass_center - entry_center) <= 80:
+		return None
 
 	bbox = coord_to_box(image_coord[contains, :2], args.box_margin, border)
 

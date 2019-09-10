@@ -47,7 +47,7 @@ def show_skeleton(image, image_coord, confidence, message = '', bbox = None):
     '''
     image = plt.imread(image) if isinstance(image, str) else image
 
-    plt.figure(figsize = (15, 15))
+    plt.figure(figsize = (12, 8))
 
     from joint_settings import cmu_short_names as short_names
     from joint_settings import cmu_parent as parent
@@ -74,6 +74,8 @@ def show_skeleton(image, image_coord, confidence, message = '', bbox = None):
     for edge in body_edges:
         if valid[edge[0]] and valid[edge[1]]:
             plt.plot(image_coord[0, edge], image_coord[1, edge])
+
+    plt.plot(np.mean(image_coord[0, valid]), np.mean(image_coord[1, valid]), 'X', color = 'w')
 
     if bbox is not None:
         rect = patches.Rectangle((bbox[0], bbox[1]), bbox[2], bbox[3], linewidth = 2, edgecolor = 'r', facecolor = 'none')

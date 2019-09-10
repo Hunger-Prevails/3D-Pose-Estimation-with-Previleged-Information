@@ -1,7 +1,9 @@
 export PATH=$PATH:/home/liu/Downloads/libjpeg-turbo/bin
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/liu/Downloads/libjpeg-turbo/lib64
 
+export CUDA_VISIBLE_DEVICES=0,1
 python main.py \
+				-half_acc \
 				-shuffle \
 				-save_record \
 				-pretrain \

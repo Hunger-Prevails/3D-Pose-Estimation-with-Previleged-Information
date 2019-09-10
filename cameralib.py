@@ -19,7 +19,7 @@ def support_single(f):
 
 class Camera:
     def __init__(
-            self, optical_center, rot_matrix, intrinsic_matrix, distortion_coeffs, world_up = (0, 0, 1)):
+            self, cam_name, optic_center, rot_matrix, intrinsics, distorts, world_up = (0, 0, 1)):
         """
         Initializes camera.
 
@@ -32,29 +32,29 @@ class Camera:
          specified differently.
 
         Args:
-            optical_center: position of the camera in world coordinates (eye point)
+            optic_center: position of the camera in world coordinates (eye point)
             rot_matrix: 3x3 rotation matrix for transforming column vectors
                 from being expressed in world reference frame to being expressed in camera
                 reference frame as follows:
-                column_point_cam = rot_matrix @ (column_point_world - optical_center)
-            intrinsic_matrix: 3x3 matrix that maps 3D points in camera space to homogeneous
+                column_point_cam = rot_matrix @ (column_point_world - optic_center)
+            intrinsics: 3x3 matrix that maps 3D points in camera space to homogeneous
                 coordinates in image (pixel) space. Its last row must be (0,0,1).
-            distortion_coeffs: parameters describing radial and tangential lens distortions,
+            distorts: parameters describing radial and tangential lens distortions,
                 following OpenCV's model and order: k1, k2, p1, p2, k3 or None,
                 if the camera has no distortion.
             world_up: a world vector that is designated as "pointing up", for use when
                 the camera wants to roll itself upright.
         """
+        self.name = cam_name
+
         self.R = np.asarray(rot_matrix, np.float32)
-        self.t = np.asarray(optical_center.flatten(), np.float32)
+        self.t = np.asarray(optic_center.flatten(), np.float32)
 
         # self._extrinsic_matrix = build_extrinsic_matrix(self.R, self.t)
 
-        self.intrinsics = np.asarray(intrinsic_matrix, np.float32)
-        if distortion_coeffs is None:
-            self.distortion_coeffs = None
-        else:
-            self.distortion_coeffs = np.asarray(distortion_coeffs, np.float32)
+        self.intrinsics = np.asarray(intrinsics, np.float32)
+
+        self.distorts = None if distorts is None else np.asarray(distorts, np.float32)
 
         self.world_up = np.asarray(world_up)
 
@@ -84,13 +84,13 @@ class Camera:
 
         projected = points[:, :2] / points[:, 2:]
 
-        if self.distortion_coeffs is not None:
+        if self.distorts is not None:
             r2 = np.sum(projected[:, :2] ** 2, axis=1, keepdims=True)
 
-            k = self.distortion_coeffs[[0, 1, 4]]
+            k = self.distorts[[0, 1, 4]]
             radial = 1 + np.hstack([r2, r2 ** 2, r2 ** 3]) @ k
 
-            p_flipped = self.distortion_coeffs[[3, 2]]
+            p_flipped = self.distorts[[3, 2]]
             tagential = projected @ (p_flipped * 2)
             distorted = projected * np.expand_dims(radial + tagential, -1) + p_flipped * r2
         else:
@@ -102,7 +102,7 @@ class Camera:
         zeros = np.zeros(3, np.float32)
         return cv2.projectPoints(
             np.expand_dims(points, 0), zeros, zeros, self.intrinsics,
-            self.distortion_coeffs)[0][:, 0, :]
+            self.distorts)[0][:, 0, :]
 
     @support_single
     def world_to_camera(self, points):
@@ -112,7 +112,7 @@ class Camera:
     @support_single
     def camera_to_world(self, points):
         points = np.asarray(points, np.float32)
-        return np.matmul(points, self.R) + self.t
+        return np.matmul(points, np.linalg.inv(self.R).T) + self.t
 
     @support_single
     def world_to_image(self, points):
@@ -122,7 +122,7 @@ class Camera:
     def image_to_camera(self, points):
         points = np.expand_dims(np.asarray(points, np.float32), 0)
         new_image_points = cv2.undistortPoints(
-            points, self.intrinsics, self.distortion_coeffs, None, None, None)
+            points, self.intrinsics, self.distorts, None, None, None)
         return cv2.convertPointsToHomogeneous(new_image_points)[:, 0, :]
 
     @support_single
@@ -155,7 +155,7 @@ class Camera:
         self.intrinsics[:2] *= factor
 
     def undistort(self):
-        self.distortion_coeffs = None
+        self.distorts = None
 
     def square_pixels(self):
         """
@@ -231,8 +231,8 @@ def build_extrinsic_matrix(rot_world_to_cam, optical_center_world):
 def camera_in_new_world(camera, new_world_camera):
     new_world_up = new_world_camera.world_to_camera(camera.world_up)
     R = np.matmul(camera.R, new_world_camera.R.T)
-    t = np.matmul(new_world_camera.R, camera.optical_center - new_world_camera.optical_center)
-    return Camera(t, R, camera.intrinsics, camera.distortion_coeffs, new_world_up)
+    t = np.matmul(new_world_camera.R, camera.optic_center - new_world_camera.optic_center)
+    return Camera(t, R, camera.intrinsics, camera.distorts, new_world_up)
 
 
 def reproject_points(points, old_camera, new_camera):
@@ -267,17 +267,17 @@ def reproject_image(
 
     # 1. Simplest case: if only the intrinsics have changed we can use an affine warp
     if (np.allclose(new_camera.R, old_camera.R) and
-            allclose_or_nones(new_camera.distortion_coeffs, old_camera.distortion_coeffs)):
+            allclose_or_nones(new_camera.distorts, old_camera.distorts)):
         relative_intrinsics = np.matmul(old_camera.intrinsics, np.linalg.inv(new_camera.intrinsics))
         return cv2.warpAffine(
             image, relative_intrinsics[:2], output_size, flags=cv2.WARP_INVERSE_MAP)
         # borderMode=border_mode, borderValue=border_value)
 
     # 2. If the new camera has no distortions we can use cv2.initUndistortRectifyMap
-    if new_camera.distortion_coeffs is None:
-        relative_rotation = np.matmul(new_camera.R, old_camera.R.T)
+    if new_camera.distorts is None:
+        relative_rotation = np.matmul(new_camera.R, np.linalg.inv(old_camera.R))
         map1, map2 = cv2.initUndistortRectifyMap(
-            old_camera.intrinsics, old_camera.distortion_coeffs, relative_rotation,
+            old_camera.intrinsics, old_camera.distorts, relative_rotation,
             new_camera.intrinsics, output_size, cv2.CV_32FC1)
         return cv2.remap(
             image, map1, map2, cv2.INTER_LINEAR, borderMode=border_mode, borderValue=border_value)
