@@ -73,6 +73,179 @@ class Trainer:
             self.criterion = self.criterion.cuda()
 
 
+    def atn_comp_train(self, epoch, data_loader, comp_loader, cuda_device):
+        n_batches = len(data_loader)
+
+        cam_loss_avg = 0
+        mat_loss_avg = 0
+        comp_loss_avg = 0
+        recon_loss_avg = 0
+        total = 0
+
+        side_out = (self.side_in - 1) / self.stride + 1
+
+        do_track = epoch != 1
+
+        comp_data_iter = iter(comp_loader) if comp_loader else None
+
+        for i, (image, true_cam, true_mat, valid_mask, intrinsics) in enumerate(data_loader):
+
+            batch = image.size(0)
+
+            if self.n_cudas:
+                image = image.half().to(cuda_device) if self.half_acc else image.to(cuda_device)
+
+                true_cam = true_cam.to(cuda_device)
+
+                true_mat = true_mat.to(cuda_device)
+
+                intrinsics = intrinsics.to(cuda_device)
+
+                valid_mask = valid_mask.to(cuda_device)
+
+            try:
+                comp_image, comp_true_mat, comp_valid_mask = next(comp_data_iter)
+            except:
+                comp_data_iter = iter(comp_loader)
+
+                comp_image, comp_true_mat, comp_valid_mask = next(comp_data_iter)
+
+            comp_batch = comp_image.size(0)
+
+            if self.n_cudas:
+                comp_image = comp_image.half().to(cuda_device) if self.half_acc else comp_image.to(cuda_device)
+
+                comp_true_mat = comp_true_mat.to(cuda_device)
+
+                comp_valid_mask = comp_valid_mask.to(cuda_device)
+
+            cam_feat, mat_feat, attention = self.model(torch.cat([image, comp_image]))
+
+            comp_mat_feat = mat_feat[batch:]
+
+            cam_feat = cam_feat[:batch]
+
+            mat_feat = mat_feat[:batch]
+
+            attention = attention[:batch]
+
+            if self.half_acc:
+                cam_feat = cam_feat.float()
+
+                mat_feat = mat_feat.float()
+
+                attention = attention.float()
+
+                comp_mat_feat = comp_mat_feat.float()
+
+            heat_mat = mat_utils.to_heatmap(mat_feat, self.num_joints, side_out, side_out)
+
+            heat_cam = utils.to_heatmap(cam_feat, self.depth, self.num_joints, side_out, side_out)
+
+            spec_mat = mat_utils.decode(heat_mat, self.side_in)
+
+            mat_loss = self.criterion(spec_mat.view(-1, 2)[valid_mask.view(-1)], true_mat.view(-1, 2)[valid_mask.view(-1)])
+
+            mat_loss_avg += mat_loss.item() * batch
+
+            key_index = self.data_info.key_index
+
+            relat_cam = utils.decode(heat_cam, self.depth_range)
+
+            relat_cam = relat_cam - relat_cam[:, key_index:key_index + 1]
+
+            spec_cam = relat_cam + true_cam[:, key_index:key_index + 1]
+
+            cam_loss = self.criterion(spec_cam.view(-1, 3)[valid_mask.view(-1)], true_cam.view(-1, 3)[valid_mask.view(-1)])
+
+            cam_loss_avg += cam_loss.item() * batch
+
+            comp_heat_mat = mat_utils.to_heatmap(comp_mat_feat, self.num_joints, side_out, side_out)
+
+            comp_spec_mat = mat_utils.decode(comp_heat_mat, self.side_in).permute(0, 2, 1)
+
+            comp_spec_mat = self.comp_linear(comp_spec_mat).permute(0, 2, 1)
+
+            comp_loss = self.criterion(comp_spec_mat.view(-1, 2)[comp_valid_mask.view(-1)], comp_true_mat.view(-1, 2)[comp_valid_mask.view(-1)])
+
+            comp_loss_avg += comp_loss.item() * comp_batch
+
+            loss = cam_loss + (1 - self.alpha) * mat_loss + self.alpha * comp_loss
+
+            if do_track:
+                recon_cam = utils.get_recon_cam(spec_mat, relat_cam, valid_mask, intrinsics, attention)
+
+                recon_loss = self.criterion(recon_cam.view(-1, 3)[valid_mask.view(-1)], true_cam.view(-1, 3)[valid_mask.view(-1)])
+
+                recon_loss_avg += recon_loss.item() * batch
+
+                loss = loss * 0.5 + recon_loss
+
+            if self.half_acc:
+                loss *= self.grad_scaling
+
+                for h_param in self.list_params:
+
+                    if h_param.grad is None:
+                        continue
+
+                    h_param.grad.detach_()
+                    h_param.grad.zero_()
+
+                loss.backward()
+
+                self.optimizer.zero_grad()
+
+                for c_param, h_param in zip(self.copy_params, self.list_params):
+
+                    if h_param.grad is None:
+                        continue
+
+                    if torch.any(torch.isnan(h_param.grad)):
+                        continue
+
+                    c_param.grad.copy_(h_param.grad)
+                    c_param.grad /= self.grad_scaling
+
+                nn.utils.clip_grad_norm_(self.copy_params, self.grad_norm)
+                self.optimizer.step()
+
+                for c_param, h_param in zip(self.copy_params, self.list_params):
+                    h_param.data.copy_(c_param.data)
+
+            else:
+                self.optimizer.zero_grad()
+                loss.backward()
+
+                nn.utils.clip_grad_norm_(self.list_params, self.grad_norm)
+                self.optimizer.step()
+
+            total += batch
+
+            message = '| train Epoch[%d] [%d/%d]' % (epoch, i, n_batches)
+            message += '  Cam Loss: %1.4f' % (cam_loss.item())
+            message += '  Mat Loss: %1.4f' % (mat_loss.item())
+            mesage += '  Comp Loss: %1.4f' % (comp_loss.item())
+
+            if do_track:
+                message += '  Recon Loss: %1.4f' % (recon_loss.item())
+
+            print message
+
+        cam_loss_avg /= total
+        mat_loss_avg /= total
+        recon_loss_avg /= total
+
+        message = '=> train Epoch[%d]  Cam Loss: %1.4f  Mat Loss: %1.4f  Comp Loss %1.4f' % (epoch, cam_loss_avg, mat_loss_avg, comp_loss_avg)
+
+        if do_track:
+            message += '  Recon Loss: %1.4f' % (recon_loss_avg)
+
+        print '\n' + message + '\n'
+
+        return dict(cam_train_loss = cam_loss_avg, mat_train_loss = mat_loss_avg, comp_train_loss = comp_loss_avg, recon_train_loss = recon_loss_avg)
+
+
     def atn_train(self, epoch, data_loader, cuda_device):
         n_batches = len(data_loader)
 
@@ -160,6 +333,9 @@ class Trainer:
                 for c_param, h_param in zip(self.copy_params, self.list_params):
 
                     if h_param.grad is None:
+                        continue
+
+                    if torch.any(torch.isnan(h_param.grad)):
                         continue
 
                     c_param.grad.copy_(h_param.grad)
@@ -353,7 +529,9 @@ class Trainer:
         self.model.train()
         self.adapt_learn_rate(epoch)
 
-        if self.do_attention:
+        if self.do_complement and self.do_attention:
+            return self.atn_comp_train(epoch, data_loader, comp_loader, torch.device('cuda'))
+        elif self.do_attention:
             return self.atn_train(epoch, data_loader, torch.device('cuda'))
         elif self.joint_space:
             return self.joint_train(epoch, data_loader, torch.device('cuda'))

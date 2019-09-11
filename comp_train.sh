@@ -3,6 +3,7 @@ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/liu/Downloads/libjpeg-turbo/lib64
 
 export CUDA_VISIBLE_DEVICES=0
 python main.py \
+				-do_complement \
 				-half_acc \
 				-shuffle \
 				-save_record \
@@ -14,7 +15,7 @@ python main.py \
 				-do_attention \
 				-model resnet50 \
 				-model_path /home/liu/pose_track/models/resnet50.pth \
-				-suffix do_attention_float16 \
+				-suffix do_attention_comp_float16 \
 				-data_name cmu \
 				-comp_name mpii \
 				-data_root_path /globalwork/data/cmu-panoptic \
@@ -24,5 +25,5 @@ python main.py \
 				-occluder_path /globalwork/liu/pascal_occluders \
 				-save_path /globalwork/liu/pose_track \
 				-criterion SmoothL1 \
-				-batch_size 64 \
+				-batch_size 16 \
 				-n_cudas 1

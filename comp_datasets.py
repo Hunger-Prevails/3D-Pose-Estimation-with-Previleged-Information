@@ -96,9 +96,9 @@ class Lecture(data.Dataset):
 
         image_coords[:, :2] = (image_coords[:, :2] - roi_begin) * scale_factor
 
-        feed_in = cv2.resize(image[roi_begin[1]:roi_end[1], roi_begin[0]:roi_end[0]], (self.side_in, self.side_in))
+        image = cv2.resize(image[roi_begin[1]:roi_end[1], roi_begin[0]:roi_end[0]], (self.side_in, self.side_in))
 
-        feed_in = self.transform(self.occlusion_augment(feed_in)) if self.do_occlude else self.transform(feed_in)
+        feed_in = self.transform(self.occlusion_augment(image)) if self.do_occlude else self.transform(image)
 
         image_coords = self.mapper.map_coord(image_coords)
 

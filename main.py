@@ -12,6 +12,7 @@ from train import Trainer
 from resnet import resnet18
 from resnet import resnet50
 
+
 def get_catalogue():
     model_creators = dict()
 
@@ -19,6 +20,7 @@ def get_catalogue():
     model_creators['resnet50'] = resnet50
 
     return model_creators
+
 
 def create_model(args):
 
@@ -67,10 +69,11 @@ def create_model(args):
 
     return model, state
 
+
 def main():
-    assert args.do_complement <= args.joint_space
     assert args.do_track <= args.joint_space
     assert args.do_attention <= args.do_track
+    assert args.do_complement <= args.do_attention
 
     model, state = create_model(args)
     print "=> Model and criterion are ready"

@@ -55,15 +55,11 @@ def get_mpii_group(phase, args):
 		
 		image_path = os.path.join(args.comp_root_path, 'images', annotation['image'])
 
-		for sing in annotation['singles']:
-
-			sample = annotation['samples'][sing]
-
-			down_path = os.path.join(args.comp_down_path, str(aid) + '_' + str(sing) + '.jpg')
+		for sid, sample in enumerate(annotation['samples']):
+			down_path = os.path.join(args.comp_down_path, str(aid) + '_' + str(sid) + '.jpg')
 
 			if sample:
-				data_params = (down_path, args.side_in, args.random_zoom, args.box_margin, annotation['shape'])
-				processes.append(pool.apply_async(func = make_sample, args = (sample, image_path, data_params)))
+				processes.append(pool.apply_async(func = make_sample, args = (sample, image_path, down_path, annotation['shape'], args)))
 
 	pool.close()
 	pool.join()
@@ -87,10 +83,9 @@ def coord_to_box(image_coord, box_margin, border, scale):
 	y_max = np.amax(valid[:, 1])
 
 	center = np.array([(x_min + x_max) / 2, (y_min + y_max) / 2])
-	shape = np.array([x_max - x_min, y_max - y_min])
+	shape = np.array([x_max - x_min, y_max - y_min]) / box_margin
 
-	pad = max(scale * 180 - np.max(shape) / box_margin, 0) * (1 - box_margin)
-	shape = shape / box_margin + pad
+	shape *= max(np.amax(shape), scale * 180) / np.amax(shape)
 
 	begin = np.maximum(center - shape / 2, np.zeros(2))
 	end = np.minimum(center + shape / 2, border)
@@ -98,24 +93,22 @@ def coord_to_box(image_coord, box_margin, border, scale):
 	return np.hstack([begin, end - begin])
 
 
-def make_sample(sample, image_path, data_params):
-
-	down_path, side_in, random_zoom, box_margin, image_shape = data_params
+def make_sample(sample, image_path, down_path, border, args):
 
 	image_coords = np.array(sample['joints']).reshape((16, 3))
 
-	border = np.array(image_shape[:2])[::-1]
+	border = np.array(border[:2])[::-1]
 
 	image_coords[:, 2] *= (0 <= image_coords[:, 0])
 	image_coords[:, 2] *= (0 <= image_coords[:, 1])
 	image_coords[:, 2] *= (image_coords[:, 0] < border[0])
 	image_coords[:, 2] *= (image_coords[:, 1] < border[1])
 
-	bbox = coord_to_box(image_coords, box_margin, border, sample['scale'])
+	bbox = coord_to_box(image_coords, args.box_margin, border, sample['scale'])
 
 	box_center = bbox[:2] + bbox[2:] / 2
 
-	expand_side = int(np.round(np.sum(bbox[2:] ** 2) ** 0.5))
+	expand_side = int(np.round(np.sum((bbox[2:] / args.random_zoom) ** 2) ** 0.5))
 
 	view_begin = (box_center - expand_side / 2).astype(np.int)
 	view_end = view_begin + expand_side
@@ -126,7 +119,7 @@ def make_sample(sample, image_path, data_params):
 	dest_begin = crop_begin - view_begin
 	dest_end = crop_end - view_begin
 
-	scale_factor = min(side_in / np.max(bbox[2:]) / random_zoom, 1.0)
+	scale_factor = min(args.side_in / np.max(bbox[2:]) / args.random_zoom, 1.0)
 
 	dest_side = int(np.round(scale_factor * expand_side))
 
@@ -148,12 +141,12 @@ def make_sample(sample, image_path, data_params):
 
 		cv2.imwrite(down_path, save_patch[:, :, ::-1])
 
-	# show_skeleton(down_path, image_coords[:, :2].T, image_coords[:, 2])
+	# show_skeleton(down_path, image_coords[:, :2].T, image_coords[:, 2], bbox = bbox)
 
 	return MatSample(down_path, image_coords, bbox)
 
 
-def show_skeleton(image, image_coord, confidence):
+def show_skeleton(image, image_coord, confidence, bbox = None):
 	'''
 	Shows coco19 skeleton(mat)
 
@@ -174,18 +167,19 @@ def show_skeleton(image, image_coord, confidence):
 			np.array(body_edges).reshape(-1, 1)
 		]
 	)
-
 	import matplotlib.pyplot as plt
+	import matplotlib.patches as patches
 
 	image = plt.imread(image) if isinstance(image, str) else image
 
 	plt.figure(figsize = (15, 15))
 
-	plt.subplot(1, 3, 1)
+	ax = plt.subplot(1, 1, 1)
+
 	plt.title('2D Body Skeleton in comp groups' + str(image.shape))
 	plt.imshow(image)
-	currentAxis = plt.gca()
-	currentAxis.set_autoscale_on(False)
+
+	ax.set_autoscale_on(False)
 
 	valid = (0.1 <= confidence)
 
@@ -194,6 +188,10 @@ def show_skeleton(image, image_coord, confidence):
 	for edge in body_edges:
 		if valid[edge[0]] and valid[edge[1]]:
 			plt.plot(image_coord[0, edge], image_coord[1, edge])
+
+	if bbox is not None:
+		rect = patches.Rectangle((bbox[0], bbox[1]), bbox[2], bbox[3], linewidth = 2, edgecolor = 'r', facecolor = 'none')
+		ax.add_patch(rect)
 
 	plt.draw()
 	plt.show()

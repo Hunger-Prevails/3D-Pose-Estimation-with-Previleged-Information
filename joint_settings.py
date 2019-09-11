@@ -151,8 +151,11 @@ mpii_cmu_match = dict(
 	[
 		('rAnkle', 'rAnkle'),
 		('rKnee', 'rKnee'),
+		('rHip', 'rHip'),
+		('lHip', 'lHip'),
 		('lKnee', 'lKnee'),
 		('lAnkle', 'lAnkle'),
+		('Pelvis', 'BodyCenter'),
 		('Thorax', 'Neck'),
 		('rWrist', 'rWrist'),
 		('rElbow', 'rElbow'),
