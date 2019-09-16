@@ -15,7 +15,7 @@ python main.py \
 				-do_attention \
 				-model resnet50 \
 				-model_path /home/liu/pose_track/models/resnet50.pth \
-				-suffix do_attention_comp_float16 \
+				-suffix do_atn_full_comp_half \
 				-data_name cmu \
 				-comp_name mpii \
 				-data_root_path /globalwork/data/cmu-panoptic \
@@ -25,5 +25,5 @@ python main.py \
 				-occluder_path /globalwork/liu/pascal_occluders \
 				-save_path /globalwork/liu/pose_track \
 				-criterion SmoothL1 \
-				-batch_size 16 \
+				-batch_size 32 \
 				-n_cudas 1

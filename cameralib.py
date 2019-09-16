@@ -19,7 +19,7 @@ def support_single(f):
 
 class Camera:
     def __init__(
-            self, cam_name, optic_center, rot_matrix, intrinsics, distorts, world_up = (0, 0, 1)):
+            self, optic_center, rot_matrix, intrinsics, distorts, world_up = (0, 0, 1)):
         """
         Initializes camera.
 
@@ -45,8 +45,6 @@ class Camera:
             world_up: a world vector that is designated as "pointing up", for use when
                 the camera wants to roll itself upright.
         """
-        self.name = cam_name
-
         self.R = np.asarray(rot_matrix, np.float32)
         self.t = np.asarray(optic_center.flatten(), np.float32)
 
@@ -68,8 +66,8 @@ class Camera:
         return Camera([0, 0, 0], np.eye(3), intrinsics, None)
 
     def rotate(self, yaw=0, pitch=0, roll=0):
-        mat = transforms3d.euler.euler2mat(-yaw, -pitch, -roll, 'syxz')
-        self.R = np,matmul(mat, self.R)
+        mat = transforms3d.euler.euler2mat(-yaw, -pitch, -roll, 'syxz').astype(np.float32)
+        self.R = np.matmul(mat, self.R)
 
     @support_single
     def camera_to_image(self, points):

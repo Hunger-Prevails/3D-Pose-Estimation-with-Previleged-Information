@@ -21,7 +21,7 @@ def get_comp_loader(args, phase, dest_info):
 
     match = getattr(joint_settings, args.comp_name + '_' + args.data_name + '_match')
 
-    mapper = Mapper(comp_group.joint_info, dest_info, match)
+    mapper = Mapper(comp_group.data_info, dest_info, match)
 
     dataset = Lecture(comp_group, mapper, args) if phase == 'train' else Exam(comp_group, mapper, args)
 
@@ -42,7 +42,7 @@ class Lecture(data.Dataset):
 
         assert data_group.phase == 'train'
 
-        self.joint_info = data_group.joint_info
+        self.data_info = data_group.data_info
         self.samples = data_group.samples
         self.mapper = mapper
 
@@ -72,7 +72,7 @@ class Lecture(data.Dataset):
 
             image_coords[:, 0] = border[0] - image_coords[:, 0]
 
-            image_coords = image_coords[self.joint_info.mirror]
+            image_coords = image_coords[self.data_info.mirror]
 
         roi_center = sample.bbox[:2] + sample.bbox[2:] / 2
         
@@ -119,7 +119,6 @@ class Exam(data.Dataset):
 
         assert data_group.phase == 'valid'
 
-        self.joint_info = data_group.joint_info
         self.samples = data_group.samples
         self.mapper = mapper
 

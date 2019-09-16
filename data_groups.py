@@ -23,7 +23,6 @@ def get_cameras(json_file, cam_names):
 				(
 					cam['name'],
 					cameralib.Camera(
-							cam['name'],
 							np.matmul(np.array(cam['R']).T, - np.array(cam['t'])),
 							np.array(cam['R']),
 							np.array(cam['K']),

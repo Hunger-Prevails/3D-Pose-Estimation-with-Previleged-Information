@@ -54,7 +54,7 @@ def show_skeleton(image, image_coord, confidence, message = '', bbox = None):
 
     mapper = dict(zip(short_names, range(len(short_names))))
 
-    body_edges = [mapper[parent[name]] for name in short_names if name in parent]
+    body_edges = [mapper[parent[name]] for name in short_names]
     body_edges = np.hstack(
         [
             np.arange(len(body_edges)).reshape(-1, 1),

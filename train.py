@@ -56,6 +56,7 @@ class Trainer:
         self.joint_space = args.joint_space
         self.do_track = args.do_track
         self.do_attention = args.do_attention
+        self.do_complement = args.do_complement
 
         self.learn_rate = args.learn_rate
         self.num_epochs = args.n_epochs
@@ -164,7 +165,7 @@ class Trainer:
 
             comp_spec_mat = mat_utils.decode(comp_heat_mat, self.side_in).permute(0, 2, 1)
 
-            comp_spec_mat = self.comp_linear(comp_spec_mat).permute(0, 2, 1)
+            comp_spec_mat = self.comp_linear(comp_spec_mat).permute(0, 2, 1).contiguous()
 
             comp_loss = self.criterion(comp_spec_mat.view(-1, 2)[comp_valid_mask.view(-1)], comp_true_mat.view(-1, 2)[comp_valid_mask.view(-1)])
 
@@ -196,22 +197,28 @@ class Trainer:
 
                 self.optimizer.zero_grad()
 
+                do_update = True
+
                 for c_param, h_param in zip(self.copy_params, self.list_params):
 
                     if h_param.grad is None:
                         continue
 
-                    if torch.any(torch.isnan(h_param.grad)):
-                        continue
+                    if torch.any(torch.isinf(h_param.grad)):
+                        do_update = False
+                        print 'update step skipped'
+                        break
 
                     c_param.grad.copy_(h_param.grad)
                     c_param.grad /= self.grad_scaling
 
-                nn.utils.clip_grad_norm_(self.copy_params, self.grad_norm)
-                self.optimizer.step()
+                if do_update:
+                    nn.utils.clip_grad_norm_(self.copy_params, self.grad_norm)
 
-                for c_param, h_param in zip(self.copy_params, self.list_params):
-                    h_param.data.copy_(c_param.data)
+                    self.optimizer.step()
+
+                    for c_param, h_param in zip(self.copy_params, self.list_params):
+                        h_param.data.copy_(c_param.data)
 
             else:
                 self.optimizer.zero_grad()
@@ -225,7 +232,7 @@ class Trainer:
             message = '| train Epoch[%d] [%d/%d]' % (epoch, i, n_batches)
             message += '  Cam Loss: %1.4f' % (cam_loss.item())
             message += '  Mat Loss: %1.4f' % (mat_loss.item())
-            mesage += '  Comp Loss: %1.4f' % (comp_loss.item())
+            message += '  Comp Loss: %1.4f' % (comp_loss.item())
 
             if do_track:
                 message += '  Recon Loss: %1.4f' % (recon_loss.item())
@@ -234,6 +241,7 @@ class Trainer:
 
         cam_loss_avg /= total
         mat_loss_avg /= total
+        comp_loss_avg /= total
         recon_loss_avg /= total
 
         message = '=> train Epoch[%d]  Cam Loss: %1.4f  Mat Loss: %1.4f  Comp Loss %1.4f' % (epoch, cam_loss_avg, mat_loss_avg, comp_loss_avg)
@@ -330,22 +338,28 @@ class Trainer:
 
                 self.optimizer.zero_grad()
 
+                do_update = True
+
                 for c_param, h_param in zip(self.copy_params, self.list_params):
 
                     if h_param.grad is None:
                         continue
 
-                    if torch.any(torch.isnan(h_param.grad)):
-                        continue
+                    if torch.any(torch.isinf(h_param.grad)):
+                        do_update = False
+                        print 'update step skipped'
+                        break
 
                     c_param.grad.copy_(h_param.grad)
                     c_param.grad /= self.grad_scaling
 
-                nn.utils.clip_grad_norm_(self.copy_params, self.grad_norm)
-                self.optimizer.step()
+                if do_update:
+                    nn.utils.clip_grad_norm_(self.copy_params, self.grad_norm)
 
-                for c_param, h_param in zip(self.copy_params, self.list_params):
-                    h_param.data.copy_(c_param.data)
+                    self.optimizer.step()
+
+                    for c_param, h_param in zip(self.copy_params, self.list_params):
+                        h_param.data.copy_(c_param.data)
 
             else:
                 self.optimizer.zero_grad()

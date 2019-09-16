@@ -33,7 +33,7 @@ def get_mpii_group(phase, args):
 	_mirror[np.array([name in mirror for name in short_names])] = np.array(map_mirror)
 	_parent[np.array([name in parent for name in short_names])] = np.array(map_parent)
 
-	joint_info = JointInfo(short_names, _parent, _mirror, mapper[base_joint])
+	data_info = JointInfo(short_names, _parent, _mirror, mapper[base_joint])
 
 	valid_images = os.path.join(args.comp_root_path, 'valid_images.txt')
 	valid_images = [line.strip() for line in open(valid_images)]
@@ -65,7 +65,7 @@ def get_mpii_group(phase, args):
 	pool.join()
 	samples = [process.get() for process in processes]
 
-	return PoseGroup(phase, joint_info, [sample for sample in samples if sample])
+	return PoseGroup(phase, data_info, [sample for sample in samples if sample])
 
 
 def coord_to_box(image_coord, box_margin, border, scale):
@@ -160,7 +160,7 @@ def show_skeleton(image, image_coord, confidence, bbox = None):
 
 	mapper = dict(zip(short_names, range(len(short_names))))
 
-	body_edges = [mapper[parent[name]] for name in short_names if name in parent]
+	body_edges = [mapper[parent[name]] for name in short_names]
 	body_edges = np.hstack(
 		[
 			np.arange(len(body_edges)).reshape(-1, 1),
