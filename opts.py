@@ -16,9 +16,13 @@ parser.add_argument('-static_filter', action='store_true', help='whether to thre
 parser.add_argument('-joint_space', action='store_true', help='whether to allow joint-space train data')
 parser.add_argument('-do_track', action='store_true', help='whether to track cam coords via least square optim')
 parser.add_argument('-do_attention', action='store_true', help='whether to learn weights for reference joint regression')
-parser.add_argument('-do_perturbate', action='store_true', help='whether to perform perturbation augmentation')
-parser.add_argument('-do_occlude', action='store_true', help='whether to perform occlusion augmentation')
 parser.add_argument('-do_complement', action='store_true', help='whether to use complement dataset')
+
+# augmentation options
+parser.add_argument('-geometry', action='store_true', help='whether to perform geometry augmentation')
+parser.add_argument('-colour', action='store_true', help='whether to perform colour augmentation')
+parser.add_argument('-eraser', action='store_true', help='whether to perform eraser augmentation')
+parser.add_argument('-occluder', action='store_true', help='whether to perform occluder augmentation')
 
 # required options
 parser.add_argument('-model', required=True, help='Backbone architecture')
@@ -55,6 +59,7 @@ parser.add_argument('-weight_decay', default=4e-5, type=float, help='Weight deca
 parser.add_argument('-box_margin', default=0.6, type=float, help='factor for generating pseudo bbox from image coords')
 parser.add_argument('-comp_loss_weight', default=0.2, type=float, help='loss weight for complement train samples')
 parser.add_argument('-depth_range', default=100.0, type=float, help='depth range of prediction')
+parser.add_argument('-random_zoom', default=0.9, type=float, help='scale for random zoom operation')
 
 # evaluation options
 parser.add_argument('-thresh_confid', default=0.1, type=float, help='threshold for a confident annotation')
@@ -62,9 +67,5 @@ parser.add_argument('-thresh_static', default=10.0, type=float, help='threshold 
 parser.add_argument('-thresh_solid', default=0.5, type=float, help='threshold for a solid estimation')
 parser.add_argument('-thresh_close', default=2.0, type=float, help='threshold for a close estimation')
 parser.add_argument('-thresh_rough', default=5.0, type=float, help='threshold for a rough estimation')
-
-# augmentation options
-parser.add_argument('-chance_occlude', default=0.8, type=float, help='chance for performing an occlusion augmentation')
-parser.add_argument('-random_zoom', default=0.9, type=float, help='scale for random zoom operation')
 
 args = parser.parse_args()

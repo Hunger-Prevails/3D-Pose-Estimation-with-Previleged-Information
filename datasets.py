@@ -8,12 +8,13 @@ import data_groups
 import cameralib
 import torch
 import utils
-import augmentation
 import torch.utils.data as data
 
-from torch.utils.data import DataLoader
 from torchvision import datasets
 from torchvision import transforms
+from augment_colour import augment_color
+from augment_occluder import random_erase
+from augment_occluder import augment_object
 
 
 def get_data_loader(args, phase):
@@ -23,7 +24,7 @@ def get_data_loader(args, phase):
 
     shuffle = args.shuffle if phase == 'train' else False
 
-    return DataLoader(
+    return data.DataLoader(
         dataset,
         batch_size = args.batch_size,
         shuffle = shuffle,
@@ -39,13 +40,15 @@ class Lecture(data.Dataset):
         assert data_group.phase == 'train'
 
         self.side_in = args.side_in
-        self.do_perturbate = args.do_perturbate
-        self.do_occlude = args.do_occlude
-        self.chance_occlude = args.chance_occlude
-        self.occ_path = args.occluder_path
         self.random_zoom = args.random_zoom
         self.joint_space = args.joint_space
 
+        self.geometry = args.geometry
+        self.colour = args.colour
+        self.eraser = args.eraser
+
+        self.occluder = args.occluder
+        self.occ_path = args.occluder_path
         self.occ_count = torch.load(os.path.join(self.occ_path, 'count.pth'))['count']
         
         self.data_info = data_group.data_info
@@ -65,7 +68,7 @@ class Lecture(data.Dataset):
         width = np.array([sample.bbox[2] / 2, 0])
         height = np.array([0, sample.bbox[3] / 2])
 
-        if self.do_perturbate:
+        if self.geometry:
             center += np.random.uniform(-0.05, 0.05, size = 2) * sample.bbox[2:]
 
         if sample.bbox[2] < sample.bbox[3]:
@@ -85,9 +88,9 @@ class Lecture(data.Dataset):
         camera.zoom(self.side_in / side_crop)
         camera.center_principal((self.side_in, self.side_in))
 
-        if self.do_perturbate:
+        if self.geometry:
             camera.zoom(np.random.uniform(self.random_zoom, self.random_zoom ** (-1)))
-            camera.rotate(roll = np.random.uniform(- np.pi / 6, np.pi / 6))
+            camera.rotate(roll = np.random.uniform(- np.pi / 9, np.pi / 9))
 
         world_coords = sample.body_pose
 
@@ -101,23 +104,28 @@ class Lecture(data.Dataset):
         image_coords = camera.camera_to_image(camera_coords)
 
         image = jpeg4py.JPEG(sample.image_path).decode()
+
         image = cameralib.reproject_image(image, sample.camera, camera, (self.side_in, self.side_in))
-        image = self.transform(self.occlusion_augment(image)) if self.do_occlude else self.transform(image)
+
+        image = self.transform(self.augment(image))
 
         if self.joint_space:
             return image, camera_coords, image_coords, np.uint8(sample.valid), camera.intrinsics
         else:
             return image, camera_coords, np.uint8(sample.valid)
 
-    def occlusion_augment(self, image):
-        random_value = np.random.uniform()
+    def augment(self, image):
 
-        if random_value < self.chance_occlude / 2:
-            image = augmentation.augment_object(image, np.random.choice(self.occ_count), self.occ_path)
-        elif random_value < self.chance_occlude:
-            image = augmentation.random_erase(image)
+        if self.occluder and np.random.uniform() < 0.2:
+            image = augment_object(image, self.occ_count, self.occ_path)
 
-        return augmentation.augment_color(image)
+        if self.eraser and np.random.uniform() < 0.2:
+            image = random_erase(image)
+
+        if self.colour and np.random.uniform() < 0.5:
+            image = augment_color(image)
+
+        return image
 
     def __getitem__(self, index):
         return self.parse_sample(self.samples[index])

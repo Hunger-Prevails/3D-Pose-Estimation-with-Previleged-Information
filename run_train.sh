@@ -3,7 +3,7 @@ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/liu/Downloads/libjpeg-turbo/lib64
 
 export CUDA_VISIBLE_DEVICES=0
 python main.py \
-				-do_perturbate \
+				-colour \
 				-half_acc \
 				-shuffle \
 				-save_record \
@@ -15,7 +15,7 @@ python main.py \
 				-do_attention \
 				-model resnet50 \
 				-model_path /home/liu/pose_track/models/resnet50.pth \
-				-suffix do_atn_full_aug_half \
+				-suffix do_atn_full_colour_half \
 				-data_name cmu \
 				-comp_name mpii \
 				-data_root_path /globalwork/data/cmu-panoptic \

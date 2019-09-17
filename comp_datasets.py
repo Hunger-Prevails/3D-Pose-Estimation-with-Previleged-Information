@@ -6,14 +6,13 @@ import numpy as np
 import comp_groups
 import torch
 import mat_utils
-import augmentation
 import joint_settings
 import torch.utils.data as data
 
-from torch.utils.data import DataLoader
+from mat_utils import Mapper
 from torchvision import datasets
 from torchvision import transforms
-from mat_utils import Mapper
+from augment_colour import augment_color
 
 
 def get_comp_loader(args, phase, dest_info):
@@ -27,7 +26,7 @@ def get_comp_loader(args, phase, dest_info):
 
     shuffle = args.shuffle if phase == 'train' else False
 
-    return DataLoader(
+    return data.DataLoader(
         dataset,
         batch_size = args.batch_size,
         shuffle = shuffle,
@@ -48,8 +47,9 @@ class Lecture(data.Dataset):
 
         self.random_zoom = args.random_zoom
         self.side_in = args.side_in
-        self.do_perturbate = args.do_perturbate
-        self.do_occlude = args.do_occlude
+
+        self.geometry = args.geometry
+        self.colour = args.colour
 
         self.mean = [0.485, 0.456, 0.406]
         self.dev = [0.229, 0.224, 0.225]
@@ -78,10 +78,10 @@ class Lecture(data.Dataset):
         
         roi_side = np.amax(sample.bbox[2:])
 
-        if self.do_perturbate:
+        if self.geometry:
             roi_center += np.random.uniform(-0.05, 0.05, size = 2) * sample.bbox[2:]
 
-            image, new_coords = mat_utils.rand_rotate(center = roi_center, image = image, points = image_coords[:, :2], max_radian = np.pi / 6)
+            image, new_coords = mat_utils.rand_rotate(center = roi_center, image = image, points = image_coords[:, :2], max_radian = np.pi / 9)
 
             image_coords = np.hstack(new_coords, image_coords[:, 2:])
 
@@ -98,7 +98,7 @@ class Lecture(data.Dataset):
 
         image = cv2.resize(image[roi_begin[1]:roi_end[1], roi_begin[0]:roi_end[0]], (self.side_in, self.side_in))
 
-        feed_in = self.transform(self.occlusion_augment(image)) if self.do_occlude else self.transform(image)
+        feed_in = self.transform(augment_color(image)) if self.colour else self.transform(image)
 
         image_coords = self.mapper.map_coord(image_coords)
 

@@ -108,7 +108,7 @@ def parse_epoch(scores, total):
 	return dict(zip(keys[:-1], np.sum(values[-1] * values[:-1], axis = 1) / total))
 
 
-def rotate(center, image, points, max_radian):
+def rand_rotate(center, image, points, max_radian):
 	'''
 	Rotates an image along with the points within it by the given angle around the given center
 
