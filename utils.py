@@ -77,47 +77,47 @@ def decode(heatmap, depth_range):
 	return torch.stack((coord_x, coord_y, coord_z), dim = 2) * depth_range
 
 
-def statistics(original, mirrored, tangential, thresh):
+def statistics(basic, flip, tangent, thresh):
 
 	dist = dict(
-		original = original,
-		mirrored = mirrored,
-		tangential = tangential
+		basic = basic,
+		flip = flip,
+		tangent = tangent
 	)
 	def count_and_eliminate(condition):
 		remains = np.nonzero(np.logical_not(condition))
 
-		dist['original'] = dist['original'][remains]
-		dist['mirrored'] = dist['mirrored'][remains]
-		dist['tangential'] = dist['tangential'][remains]
+		dist['basic'] = dist['basic'][remains]
+		dist['flip'] = dist['flip'][remains]
+		dist['tangent'] = dist['tangent'][remains]
 
 		return np.count_nonzero(condition)
 
-	count = float(dist['original'].size)
+	count = float(dist['basic'].size)
 
 	keys = ('solid', 'close', 'jitter', 'depth', 'switch', 'fail')
 
-	solid = count_and_eliminate(dist['original'] <= thresh['solid']) / count
+	solid = count_and_eliminate(dist['basic'] <= thresh['solid']) / count
 	
-	close = count_and_eliminate(dist['original'] <= thresh['close']) / count
+	close = count_and_eliminate(dist['basic'] <= thresh['close']) / count
 	
-	jitter = count_and_eliminate(dist['original'] <= thresh['rough']) / count
+	jitter = count_and_eliminate(dist['basic'] <= thresh['rough']) / count
 	
-	depth = count_and_eliminate(dist['tangential'] <= thresh['close']) / count
+	depth = count_and_eliminate(dist['tangent'] <= thresh['close']) / count
 
-	switch = count_and_eliminate(dist['mirrored'] <= thresh['rough']) / count
+	switch = count_and_eliminate(dist['flip'] <= thresh['rough']) / count
 
-	return dict(zip(keys, (solid, close, jitter, depth, switch, dist['original'].size / count)))
+	return dict(zip(keys, (solid, close, jitter, depth, switch, dist['basic'].size / count)))
 
 
-def parse_epoch(stats, total):
+def parse_epoch(stats):
 
 	keys = ('solid', 'close', 'jitter', 'depth', 'switch', 'fail')
 	keys += ('score_pck', 'score_auc', 'cam_mean', 'batch_size')
 
 	values = np.array([[patch[key] for patch in stats] for key in keys])
 
-	return dict(zip(keys[:-1], np.sum(values[-1] * values[:-1], axis = 1) / total))
+	return dict(zip(keys[:-1], np.sum(values[-1] * values[:-1], axis = 1) / np.sum(values[-1])))
 
 
 def analyze(spec_cam, true_cam, valid_mask, mirror, thresh):
@@ -134,25 +134,26 @@ def analyze(spec_cam, true_cam, valid_mask, mirror, thresh):
 		dict containing batch_size | scores | statistics
 
 	'''
-	original = np.linalg.norm(spec_cam - true_cam, axis = -1)
-	mirrored = np.linalg.norm(spec_cam - true_cam[:, mirror], axis = -1)
-	tangential = np.linalg.norm(spec_cam[:, :, :2] - true_cam[:, :, :2], axis = -1)
-
 	valid = valid_mask.flatten()
 
-	original = original.flatten()[valid]
-	mirrored = mirrored.flatten()[valid]
-	tangential = tangential.flatten()[valid]
+	dist = np.linalg.norm(spec_cam - true_cam, axis = -1)
+	dist = dist.flatten()[valid]
+	
+	dist_flip = np.linalg.norm(spec_cam - true_cam[:, mirror], axis = -1)
+	dist_flip = dist_flip.flatten()[valid]
+	
+	dist_tangent = np.linalg.norm(spec_cam[:, :, :2] - true_cam[:, :, :2], axis = -1)
+	dist_tangent = dist_tangent.flatten()[valid]
 
-	cam_mean = np.mean(original)
-	score_pck = np.mean(original / thresh['rough'] <= 1.0)
-	score_auc = np.mean(np.maximum(0, 1 - original / thresh['rough']))
+	cam_mean = np.mean(dist)
+	score_pck = np.mean(dist / thresh['rough'] <= 1.0)
+	score_auc = np.mean(np.maximum(0, 1 - dist / thresh['rough']))
 
-	stats = statistics(original, mirrored, tangential, thresh)
+	stats = statistics(dist, dist_flip, dist_tangent, thresh)
 
 	stats.update(
 		dict(
-			batch_size = spec_cam.shape[0],
+			batch_size = dist.shape[0],
 			score_pck = score_pck,
 			score_auc = score_auc,
 			cam_mean = cam_mean

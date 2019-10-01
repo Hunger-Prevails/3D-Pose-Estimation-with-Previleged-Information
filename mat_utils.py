@@ -55,19 +55,28 @@ def decode(heatmap, map_range):
 	return torch.stack((coord_x, coord_y), dim = 2) * map_range  # (batch_size, num_joints, 2)
 
 
-def coord_to_area(true_mat):
+def coord_to_scale(true_mat, valid):
 	'''
 	utilizes true image coords to compute relative scale of a pose instance in terms of its area
 
 	Args:
 		true_mat: (batch_size, num_joints, 2)
+		valid: (batch_size, num_joints)
 	'''
-	x_min = np.min(true_mat[:, :, 0], axis = -1)  # (batch_size,)
-	x_max = np.max(true_mat[:, :, 0], axis = -1)  # (batch_size,)
-	y_min = np.min(true_mat[:, :, 1], axis = -1)  # (batch_size,)
-	y_max = np.max(true_mat[:, :, 1], axis = -1)  # (batch_size,)
+	scales = []
 
-	return (x_max - x_min) * (y_max - y_min)
+	for _true_mat, _valid in zip(true_mat, valid):
+
+		_true_mat = _true_mat[_valid]  # (k, 2)
+
+		x_min = np.amin(_true_mat[:, 0])
+		x_max = np.amax(_true_mat[:, 0])
+		y_min = np.amin(_true_mat[:, 1])
+		y_max = np.amax(_true_mat[:, 1])
+
+		scales.append(np.maximum(x_max - x_min, y_max - y_min))
+
+	return np.array(scales)
 
 
 def analyze(spec_mat, true_mat, valid_mask, side_in):
@@ -82,13 +91,13 @@ def analyze(spec_mat, true_mat, valid_mask, side_in):
 	Returns:
 		dict containing batch_size mean and statistics
 	'''
-	dist = np.sum((spec_mat - true_mat) ** 2, axis = -1)  # (batch_size, num_joints)
+	dist = np.linalg.norm(spec_mat - true_mat, axis = -1)  # (batch_size, num_joints)
 
-	mat_mean = np.mean(dist ** 0.5)
+	mat_mean = np.mean(dist[valid_mask])
 
-	area = coord_to_area(true_mat)  # (batch_size,)
+	scales = coord_to_scale(true_mat, valid_mask)  # (batch_size,)
 
-	oks = np.exp(- dist / np.expand_dims(area * 4 / side_in ** 2, axis = -1) / 2)  # (batch_size, num_joints)
+	oks = np.exp(- dist / np.expand_dims(2 * (scales / side_in) ** 2, axis = -1))  # (batch_size, num_joints)
 
 	oks = np.sum(oks * valid_mask, axis = -1) / np.sum(valid_mask, axis = -1)  # (batch_size,)
 
@@ -99,13 +108,13 @@ def analyze(spec_mat, true_mat, valid_mask, side_in):
 	)
 
 
-def parse_epoch(scores, total):
+def parse_epoch(scores):
 
 	keys = ('score_oks', 'mat_mean', 'batch_size')
 
 	values = np.array([[patch[key] for patch in scores] for key in keys])
 
-	return dict(zip(keys[:-1], np.sum(values[-1] * values[:-1], axis = 1) / total))
+	return dict(zip(keys[:-1], np.sum(values[-1] * values[:-1], axis = 1) / np.sum(values[-1])))
 
 
 def rand_rotate(center, image, points, max_radian):

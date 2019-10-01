@@ -51,7 +51,7 @@ parser.add_argument('-num_valid', default=7, type=int, help='minimum number of v
 parser.add_argument('-depth', default=16, type=int, help='depth side of volumetric heatmap')
 
 # train options
-parser.add_argument('-learn_rate', default=1e-4, type=float, help='Base learning rate for train')
+parser.add_argument('-learn_rate', default=5e-5, type=float, help='Base learning rate for train')
 parser.add_argument('-grad_norm', default=5.0, type=float, help='norm for gradient clip')
 parser.add_argument('-grad_scaling', default=32.0, type=float, help='magnitude of loss scaling when performing float16 computation')
 parser.add_argument('-momentum', default=0.9, type=float, help='Momentum for training')

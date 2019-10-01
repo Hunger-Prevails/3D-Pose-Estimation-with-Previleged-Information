@@ -27,7 +27,7 @@ def augment_hue(image, space):
     if space != 'hsv':
         image = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
 
-    image[:, :, 0] += np.random.uniform(-36, 36)
+    image[:, :, 0] += np.random.uniform(-18, 18)
 
     image[:, :, 0][image[:, :, 0] < 0] += 360
     image[:, :, 0][360 <= image[:, :, 0]] -= 360

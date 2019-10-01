@@ -623,11 +623,10 @@ class Trainer:
                 cam_loss = self.criterion(spec_cam.view(-1, 3)[valid_mask.view(-1)], true_cam.view(-1, 3)[valid_mask.view(-1)])
                 mat_loss = self.criterion(spec_mat.view(-1, 2)[valid_mask.view(-1)], true_mat.view(-1, 2)[valid_mask.view(-1)])
 
-                loss = cam_loss + mat_loss
+            cam_loss_avg += cam_loss.item() * batch
+            mat_loss_avg += mat_loss.item() * batch
 
-                cam_loss_avg += cam_loss.item() * batch
-                mat_loss_avg += mat_loss.item() * batch
-                total += batch
+            total += batch
 
             print "| test Epoch[%d] [%d/%d]  Cam Loss: %1.4f  Mat Loss: %1.4f" % (epoch, i, n_batches, cam_loss.item(), mat_loss.item())
 
@@ -662,8 +661,8 @@ class Trainer:
 
         record = dict(cam_test_loss = cam_loss_avg, mat_test_loss = mat_loss_avg)
 
-        record.update(mat_utils.parse_epoch(mat_stats, total))
-        record.update(utils.parse_epoch(cam_stats, total))
+        record.update(mat_utils.parse_epoch(mat_stats))
+        record.update(utils.parse_epoch(cam_stats))
 
         print ''
         print '=> test Epoch[%d]  Cam Loss: %1.4f  Mat Loss: %1.4f\n' % (epoch, cam_loss_avg, mat_loss_avg)
@@ -672,7 +671,7 @@ class Trainer:
 
         print '=>[SPEC] cam_mean: %1.3f  [pck]: %1.3f  [auc]: %1.3f\n' % (record['cam_mean'], record['score_pck'], record['score_auc'])
 
-        track_rec = utils.parse_epoch(det_stats, total)
+        track_rec = utils.parse_epoch(det_stats)
 
         print '=>[DETER] cam_mean: %1.3f  [pck]: %1.3f  [auc]: %1.3f\n' % (track_rec['cam_mean'], track_rec['score_pck'], track_rec['score_auc'])
 
@@ -744,11 +743,10 @@ class Trainer:
                 cam_loss = self.criterion(spec_cam.view(-1, 3)[valid_mask.view(-1)], true_cam.view(-1, 3)[valid_mask.view(-1)])
                 mat_loss = self.criterion(spec_mat.view(-1, 2)[valid_mask.view(-1)], true_mat.view(-1, 2)[valid_mask.view(-1)])
 
-                loss = cam_loss + mat_loss
+            cam_loss_avg += cam_loss.item() * batch
+            mat_loss_avg += mat_loss.item() * batch
 
-                cam_loss_avg += cam_loss.item() * batch
-                mat_loss_avg += mat_loss.item() * batch
-                total += batch
+            total += batch
 
             print "| test Epoch[%d] [%d/%d]  Cam Loss: %1.4f  Mat Loss: %1.4f" % (epoch, i, n_batches, cam_loss.item(), mat_loss.item())
 
@@ -785,8 +783,8 @@ class Trainer:
 
         record = dict(cam_test_loss = cam_loss_avg, mat_test_loss = mat_loss_avg)
 
-        record.update(mat_utils.parse_epoch(mat_stats, total))
-        record.update(utils.parse_epoch(cam_stats, total))
+        record.update(mat_utils.parse_epoch(mat_stats))
+        record.update(utils.parse_epoch(cam_stats))
 
         print ''
         print '=> test Epoch[%d]  Cam Loss: %1.4f  Mat Loss: %1.4f\n' % (epoch, cam_loss_avg, mat_loss_avg)
@@ -797,7 +795,7 @@ class Trainer:
 
         if self.do_track:
 
-            track_rec = utils.parse_epoch(det_stats, total)
+            track_rec = utils.parse_epoch(det_stats)
 
             print '=>[DETER] cam_mean: %1.3f  [pck]: %1.3f  [auc]: %1.3f\n' % (track_rec['cam_mean'], track_rec['score_pck'], track_rec['score_auc'])
 
@@ -851,8 +849,9 @@ class Trainer:
 
                 loss = self.criterion(spec_cam.view(-1, 3)[valid_mask.view(-1)], true_cam.view(-1, 3)[valid_mask.view(-1)])
 
-                loss_avg += loss.item() * batch
-                total += batch
+            loss_avg += loss.item() * batch
+
+            total += batch
 
             valid_mask = valid_mask.cpu().numpy().astype(np.bool)
 
@@ -869,7 +868,7 @@ class Trainer:
         loss_avg /= total
 
         record = dict(test_loss = loss_avg)
-        record.update(utils.parse_epoch(cam_stats, total))
+        record.update(utils.parse_epoch(cam_stats))
 
         print ''
         print '=> test Epoch[%d]  Cam Loss: %1.4f\n' % (epoch, loss_avg)

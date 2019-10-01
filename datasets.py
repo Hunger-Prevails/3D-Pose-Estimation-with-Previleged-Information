@@ -122,7 +122,7 @@ class Lecture(data.Dataset):
         if self.eraser and np.random.uniform() < 0.2:
             image = random_erase(image)
 
-        if self.colour and np.random.uniform() < 0.5:
+        if self.colour and np.random.uniform() < 0.9:
             image = augment_color(image)
 
         return image
