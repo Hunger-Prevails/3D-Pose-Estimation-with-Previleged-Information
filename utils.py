@@ -14,16 +14,6 @@ class PoseSample:
 		self.camera = camera
 
 
-class PoseGroup:
-	
-	def __init__(self, phase, data_info, samples):
-		assert phase in ['train', 'valid', 'test']
-
-		self.phase = phase
-		self.data_info = data_info
-		self.samples = samples
-
-
 class JointInfo:
 	def __init__(self, short_names, parent, mirror, key_index, weight = None, essence = None):
 		self.short_names = short_names

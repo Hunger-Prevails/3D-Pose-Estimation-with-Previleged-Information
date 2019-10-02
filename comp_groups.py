@@ -9,7 +9,6 @@ import multiprocessing
 
 from utils import JointInfo
 from mat_utils import MatSample
-from utils import PoseGroup
 
 
 def get_mpii_group(phase, args):
@@ -63,9 +62,11 @@ def get_mpii_group(phase, args):
 
 	pool.close()
 	pool.join()
-	samples = [process.get() for process in processes]
 
-	return PoseGroup(phase, data_info, [sample for sample in samples if sample])
+	samples = [process.get() for process in processes]
+	samples = [sample for sample in samples if sample]
+
+	return data_info, samples
 
 
 def coord_to_box(image_coord, box_margin, border, scale):

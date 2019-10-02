@@ -9,7 +9,6 @@ import multiprocessing
 
 from utils import JointInfo
 from utils import PoseSample
-from utils import PoseGroup
 
 
 def get_cameras(json_file, cam_names):
@@ -293,6 +292,8 @@ def get_cmu_group(phase, args):
 
 	pool.close()
 	pool.join()
-	samples = [process.get() for process in processes]
 
-	return PoseGroup(phase, data_info, [sample for sample in samples if sample])
+	samples = [process.get() for process in processes]
+	samples = [sample for sample in samples if sample]
+
+	return data_info, samples

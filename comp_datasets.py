@@ -16,33 +16,25 @@ from augment_colour import augment_color
 
 
 def get_comp_loader(args, phase, dest_info):
-    comp_group = getattr(comp_groups, 'get_' + args.comp_name + '_group')(phase, args)
+    data_info, samples = getattr(comp_groups, 'get_' + args.comp_name + '_group')(phase, args)
 
     match = getattr(joint_settings, args.comp_name + '_' + args.data_name + '_match')
 
-    mapper = Mapper(comp_group.data_info, dest_info, match)
+    mapper = Mapper(data_info, dest_info, match)
 
-    dataset = Lecture(comp_group, mapper, args) if phase == 'train' else Exam(comp_group, mapper, args)
+    dataset = Lecture(data_info, samples, mapper, args) if phase == 'train' else Exam(samples, mapper, args)
 
     shuffle = args.shuffle if phase == 'train' else False
 
-    return data.DataLoader(
-        dataset,
-        batch_size = args.batch_size,
-        shuffle = shuffle,
-        num_workers = args.workers,
-        pin_memory = True
-    )
+    return data.DataLoader(dataset, args.batch_size, shuffle, num_workers = args.workers, pin_memory = True)
 
 
 class Lecture(data.Dataset):
 
-    def __init__(self, data_group, mapper, args):
+    def __init__(self, data_info, samples, mapper, args):
 
-        assert data_group.phase == 'train'
-
-        self.data_info = data_group.data_info
-        self.samples = data_group.samples
+        self.data_info = data_info
+        self.samples = samples
         self.mapper = mapper
 
         self.random_zoom = args.random_zoom
@@ -115,11 +107,9 @@ class Lecture(data.Dataset):
 
 class Exam(data.Dataset):
 
-    def __init__(self, data_group, mapper, args):
+    def __init__(self, samples, mapper, args):
 
-        assert data_group.phase == 'valid'
-
-        self.samples = data_group.samples
+        self.samples = samples
         self.mapper = mapper
 
         self.side_in = args.side_in

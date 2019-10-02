@@ -18,26 +18,23 @@ from augment_occluder import augment_object
 
 
 def get_data_loader(args, phase):
-    data_group = getattr(data_groups, 'get_' + args.data_name + '_group')(phase, args)
+    data_info, samples = getattr(data_groups, 'get_' + args.data_name + '_group')(phase, args)
 
-    dataset = Lecture(data_group, args) if phase == 'train' else Exam(data_group, args)
+    dataset = Lecture(data_info, samples, args) if phase == 'train' else Exam(samples, args)
 
     shuffle = args.shuffle if phase == 'train' else False
 
-    return data.DataLoader(
-        dataset,
-        batch_size = args.batch_size,
-        shuffle = shuffle,
-        num_workers = args.workers,
-        pin_memory = True
-    ), data_group.data_info
+    data_loader = data.DataLoader(dataset, args.batch_size, shuffle, num_workers = args.workers, pin_memory = True)
+
+    return data_loader, data_info
 
 
 class Lecture(data.Dataset):
 
-    def __init__(self, data_group, args):
+    def __init__(self, data_info, samples, args):
 
-        assert data_group.phase == 'train'
+        self.data_info = data_info
+        self.samples = samples
 
         self.side_in = args.side_in
         self.random_zoom = args.random_zoom
@@ -50,9 +47,6 @@ class Lecture(data.Dataset):
         self.occluder = args.occluder
         self.occ_path = args.occluder_path
         self.occ_count = torch.load(os.path.join(self.occ_path, 'count.pth'))['count']
-        
-        self.data_info = data_group.data_info
-        self.samples = data_group.samples
 
         self.mean = [0.485, 0.456, 0.406]
         self.dev = [0.229, 0.224, 0.225]
@@ -136,14 +130,12 @@ class Lecture(data.Dataset):
 
 class Exam(data.Dataset):
 
-    def __init__(self, data_group, args):
-        
-        assert data_group.phase != 'train'
+    def __init__(self, samples, args):
 
         self.side_in = args.side_in
         self.joint_space = args.joint_space
 
-        self.samples = data_group.samples
+        self.samples = samples
 
         self.mean = [0.485, 0.456, 0.406]
         self.dev = [0.229, 0.224, 0.225]
