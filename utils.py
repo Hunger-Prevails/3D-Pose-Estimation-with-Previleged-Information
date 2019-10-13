@@ -6,12 +6,13 @@ from builtins import zip as xzip
 
 class PoseSample:
 	
-	def __init__(self, image_path, body_pose, valid, bbox, camera):
+	def __init__(self, image_path, body_pose, valid, bbox, camera, confid):
 		self.image_path = image_path
 		self.body_pose = body_pose
 		self.valid = valid
 		self.bbox = bbox
 		self.camera = camera
+		self.confid = confid
 
 
 class JointInfo:

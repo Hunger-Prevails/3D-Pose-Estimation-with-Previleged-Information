@@ -73,7 +73,7 @@ def create_model(args):
 def main():
     assert args.do_track <= args.joint_space
     assert args.do_attention <= args.do_track
-    assert args.do_complement <= args.do_attention
+    assert args.do_company <= args.do_attention
 
     model, state = create_model(args)
     print "=> Model and criterion are ready"
@@ -87,7 +87,7 @@ def main():
 
         data_loader, data_info = get_data_loader(args, 'train')
 
-        comp_loader = get_comp_loader(args, 'train', data_info) if args.do_complement else None
+        comp_loader = get_comp_loader(args, 'train', data_info) if args.do_company else None
 
     print "=> Dataloaders are ready"
 

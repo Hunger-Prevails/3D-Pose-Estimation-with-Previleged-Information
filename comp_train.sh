@@ -26,4 +26,5 @@ python main.py \
 				-save_path /globalwork/liu/pose_track \
 				-criterion SmoothL1 \
 				-batch_size 32 \
+				-learn_rate 2e-5 \
 				-n_cudas 1

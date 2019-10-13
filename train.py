@@ -20,7 +20,7 @@ class Trainer:
 
         self.list_params = list(model.parameters())
 
-        if args.do_complement:
+        if args.do_company:
             self.alpha = args.comp_loss_weight
 
             self.comp_linear = nn.Linear(args.num_joints, args.num_joints)
@@ -56,7 +56,7 @@ class Trainer:
         self.joint_space = args.joint_space
         self.do_track = args.do_track
         self.do_attention = args.do_attention
-        self.do_complement = args.do_complement
+        self.do_company = args.do_company
 
         self.learn_rate = args.learn_rate
         self.num_epochs = args.n_epochs
@@ -89,7 +89,7 @@ class Trainer:
 
         comp_data_iter = iter(comp_loader) if comp_loader else None
 
-        for i, (image, true_cam, true_mat, valid_mask, intrinsics) in enumerate(data_loader):
+        for i, (image, true_cam, true_mat, cam_valid, mat_valid, intrinsics) in enumerate(data_loader):
 
             batch = image.size(0)
 
@@ -102,7 +102,9 @@ class Trainer:
 
                 intrinsics = intrinsics.to(cuda_device)
 
-                valid_mask = valid_mask.to(cuda_device)
+                cam_valid = cam_valid.to(cuda_device)
+
+                mat_valid = mat_valid.to(cuda_device)
 
             try:
                 comp_image, comp_true_mat, comp_valid_mask = next(comp_data_iter)
@@ -145,7 +147,7 @@ class Trainer:
 
             spec_mat = mat_utils.decode(heat_mat, self.side_in)
 
-            mat_loss = self.criterion(spec_mat.view(-1, 2)[valid_mask.view(-1)], true_mat.view(-1, 2)[valid_mask.view(-1)])
+            mat_loss = self.criterion(spec_mat.view(-1, 2)[mat_valid.view(-1)], true_mat.view(-1, 2)[mat_valid.view(-1)])
 
             mat_loss_avg += mat_loss.item() * batch
 
@@ -157,7 +159,7 @@ class Trainer:
 
             spec_cam = relat_cam + true_cam[:, key_index:key_index + 1]
 
-            cam_loss = self.criterion(spec_cam.view(-1, 3)[valid_mask.view(-1)], true_cam.view(-1, 3)[valid_mask.view(-1)])
+            cam_loss = self.criterion(spec_cam.view(-1, 3)[cam_valid.view(-1)], true_cam.view(-1, 3)[cam_valid.view(-1)])
 
             cam_loss_avg += cam_loss.item() * batch
 
@@ -174,9 +176,9 @@ class Trainer:
             loss = cam_loss + (1 - self.alpha) * mat_loss + self.alpha * comp_loss
 
             if do_track:
-                recon_cam = utils.get_recon_cam(spec_mat, relat_cam, valid_mask, intrinsics, attention)
+                recon_cam = utils.get_recon_cam(spec_mat, relat_cam, cam_valid, intrinsics, attention)
 
-                recon_loss = self.criterion(recon_cam.view(-1, 3)[valid_mask.view(-1)], true_cam.view(-1, 3)[valid_mask.view(-1)])
+                recon_loss = self.criterion(recon_cam.view(-1, 3)[cam_valid.view(-1)], true_cam.view(-1, 3)[cam_valid.view(-1)])
 
                 recon_loss_avg += recon_loss.item() * batch
 
@@ -266,7 +268,7 @@ class Trainer:
 
         do_track = epoch != 1
 
-        for i, (image, true_cam, true_mat, valid_mask, intrinsics) in enumerate(data_loader):
+        for i, (image, true_cam, true_mat, cam_valid, mat_valid, intrinsics) in enumerate(data_loader):
 
             if self.n_cudas:
                 image = image.half().to(cuda_device) if self.half_acc else image.to(cuda_device)
@@ -277,7 +279,9 @@ class Trainer:
 
                 intrinsics = intrinsics.to(cuda_device)
 
-                valid_mask = valid_mask.to(cuda_device)
+                cam_valid = cam_valid.to(cuda_device)
+
+                mat_valid = mat_valid.to(cuda_device)
 
             batch = image.size(0)
 
@@ -296,7 +300,7 @@ class Trainer:
 
             spec_mat = mat_utils.decode(heat_mat, self.side_in)
 
-            mat_loss = self.criterion(spec_mat.view(-1, 2)[valid_mask.view(-1)], true_mat.view(-1, 2)[valid_mask.view(-1)])
+            mat_loss = self.criterion(spec_mat.view(-1, 2)[mat_valid.view(-1)], true_mat.view(-1, 2)[mat_valid.view(-1)])
 
             mat_loss_avg += mat_loss.item() * batch
 
@@ -308,16 +312,16 @@ class Trainer:
 
             spec_cam = relat_cam + true_cam[:, key_index:key_index + 1]
 
-            cam_loss = self.criterion(spec_cam.view(-1, 3)[valid_mask.view(-1)], true_cam.view(-1, 3)[valid_mask.view(-1)])
+            cam_loss = self.criterion(spec_cam.view(-1, 3)[cam_valid.view(-1)], true_cam.view(-1, 3)[cam_valid.view(-1)])
 
             cam_loss_avg += cam_loss.item() * batch
 
             loss = cam_loss + mat_loss
 
             if do_track:
-                recon_cam = utils.get_recon_cam(spec_mat, relat_cam, valid_mask, intrinsics, attention)
+                recon_cam = utils.get_recon_cam(spec_mat, relat_cam, cam_valid, intrinsics, attention)
 
-                recon_loss = self.criterion(recon_cam.view(-1, 3)[valid_mask.view(-1)], true_cam.view(-1, 3)[valid_mask.view(-1)])
+                recon_loss = self.criterion(recon_cam.view(-1, 3)[cam_valid.view(-1)], true_cam.view(-1, 3)[cam_valid.view(-1)])
 
                 recon_loss_avg += recon_loss.item() * batch
 
@@ -543,7 +547,7 @@ class Trainer:
         self.model.train()
         self.adapt_learn_rate(epoch)
 
-        if self.do_complement and self.do_attention:
+        if self.do_company and self.do_attention:
             return self.atn_comp_train(epoch, data_loader, comp_loader, torch.device('cuda'))
         elif self.do_attention:
             return self.atn_train(epoch, data_loader, torch.device('cuda'))

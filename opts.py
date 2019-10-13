@@ -11,12 +11,13 @@ parser.add_argument('-val_only', action='store_true', help='only performs valida
 parser.add_argument('-pretrain', action='store_true', help='whether to load an imagenet pre-train')
 parser.add_argument('-resume', action='store_true', help='whether to continue from a previous checkpoint')
 parser.add_argument('-flip_test', action='store_true', help='whether to perform flip test')
+parser.add_argument('-out_of_view', action='store_true', help='whether to train cam regressor on out-of-view keypoints')
 parser.add_argument('-confid_filter', action='store_true', help='whether to threshold uncertain keypoints off')
 parser.add_argument('-static_filter', action='store_true', help='whether to threshold static frames off')
 parser.add_argument('-joint_space', action='store_true', help='whether to allow joint-space train data')
 parser.add_argument('-do_track', action='store_true', help='whether to track cam coords via least square optim')
 parser.add_argument('-do_attention', action='store_true', help='whether to learn weights for reference joint regression')
-parser.add_argument('-do_complement', action='store_true', help='whether to use complement dataset')
+parser.add_argument('-do_company', action='store_true', help='whether to use complement dataset')
 
 # augmentation options
 parser.add_argument('-geometry', action='store_true', help='whether to perform geometry augmentation')

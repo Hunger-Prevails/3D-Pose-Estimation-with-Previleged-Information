@@ -51,9 +51,9 @@ def make_sample(paths, annos, args):
 	cond1 = np.all(0 <= image_coord[:, :2], axis = 1)
 	cond2 = np.all(image_coord[:, :2] < border, axis = 1)
 
-	contains = cond1 & cond2 & (image_coord[:, 2] != -1)
+	cond3 = cond1 & cond2 & (image_coord[:, 2] != -1)
 
-	valid = (args.thresh_confid <= image_coord[:, 2]) & contains if args.confid_filter else contains
+	valid = (args.thresh_confid <= image_coord[:, 2]) & cond3 if args.confid_filter else cond3
 
 	if np.sum(valid) < args.num_valid:
 		return None
@@ -64,7 +64,9 @@ def make_sample(paths, annos, args):
 	if np.linalg.norm(mass_center - entry_center) <= 80:
 		return None
 
-	bbox = coord_to_box(image_coord[contains, :2], args.box_margin, border)
+	bbox = coord_to_box(image_coord[cond3, :2], args.box_margin, border)
+
+	confid = (args.thresh_confid <= image_coord[:, 2]) if args.out_of_view else valid.copy()
 
 	expand_side = np.sum((bbox[2:] / args.random_zoom) ** 2) ** 0.5
 
@@ -90,7 +92,7 @@ def make_sample(paths, annos, args):
 
 		cv2.imwrite(new_path, new_image[:, :, ::-1])
 
-	return PoseSample(new_path, body_pose, valid, new_bbox, new_camera)
+	return PoseSample(new_path, body_pose, valid, new_bbox, new_camera, confid)
 
 
 def coord_to_box(valid_coord, box_margin, border):
