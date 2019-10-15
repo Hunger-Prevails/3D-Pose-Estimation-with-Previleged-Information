@@ -44,7 +44,7 @@ parser.add_argument('-criterion', required=True, help='Type of objective functio
 parser.add_argument('-n_epochs', default=20, type=int, help='Training epochs')
 parser.add_argument('-batch_size', default=64, type=int, help='Size of mini-batches for each iteration')
 parser.add_argument('-n_cudas', default=2, type=int, help='Number of cuda devices available')
-parser.add_argument('-workers', default=6, type=int, help='Number of subprocesses to to load data')
+parser.add_argument('-workers', default=2, type=int, help='Number of subprocesses to to load data')
 parser.add_argument('-num_processes', default=6, type=int, help='Number of subprocesses in the process pool')
 parser.add_argument('-side_in', default=257, type=int, help='side of input image')
 parser.add_argument('-stride', default=16, type=int, help='stride of network for train')

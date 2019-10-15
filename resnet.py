@@ -242,7 +242,7 @@ def resnet18(args):
         keys = toy_dict.keys()
 
         if args.extra_channel:
-            tensor = model.state_dict()['conv1.weight']
+            tensor = model_dict['conv1.weight']
             tensor[:, :3] = toy_dict['conv1.weight'].data
             toy_dict['conv1.weight'].data = tensor
 
@@ -268,7 +268,7 @@ def resnet50(args):
         keys = toy_dict.keys()
 
         if args.extra_channel:
-            tensor = model.state_dict()['conv1.weight']
+            tensor = model_dict['conv1.weight']
             tensor[:, :3] = toy_dict['conv1.weight'].data
             toy_dict['conv1.weight'].data = tensor
 
