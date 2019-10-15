@@ -136,7 +136,7 @@ class ResNet(nn.Module):
         side_out = (args.side_in - 1) / args.stride + 1
 
         self.conv1 = nn.Conv2d(
-            in_channels = 3,
+            in_channels = 4 if args.extra_channel else 3,
             out_channels = 64,
             kernel_size = 7,
             stride = 2,
@@ -241,11 +241,16 @@ def resnet18(args):
         
         keys = toy_dict.keys()
 
+        if args.extra_channel:
+            tensor = model.state_dict()['conv1.weight']
+            tensor[:, :3] = toy_dict['conv1.weight'].data
+            toy_dict['conv1.weight'].data = tensor
+
         for key in keys:
             if key not in model_dict:
-                print key
+                print 'key [', key, '] deleted'
                 del toy_dict[key]
-        
+
         model_dict.update(toy_dict)
         model.load_state_dict(model_dict)
 
@@ -262,9 +267,14 @@ def resnet50(args):
         
         keys = toy_dict.keys()
 
+        if args.extra_channel:
+            tensor = model.state_dict()['conv1.weight']
+            tensor[:, :3] = toy_dict['conv1.weight'].data
+            toy_dict['conv1.weight'].data = tensor
+
         for key in keys:
             if key not in model_dict:
-                print key
+                print 'key [', key, '] deleted'
                 del toy_dict[key]
         
         model_dict.update(toy_dict)

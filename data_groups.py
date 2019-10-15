@@ -12,7 +12,7 @@ from utils import PoseSample
 
 
 def get_cameras(json_file, cam_names):
-	
+
 	calibration = json.load(open(json_file))
 
 	cameras = [cam for cam in calibration['cameras'] if cam['panel'] == 0]

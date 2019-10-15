@@ -12,6 +12,7 @@ parser.add_argument('-pretrain', action='store_true', help='whether to load an i
 parser.add_argument('-resume', action='store_true', help='whether to continue from a previous checkpoint')
 parser.add_argument('-flip_test', action='store_true', help='whether to perform flip test')
 parser.add_argument('-out_of_view', action='store_true', help='whether to train cam regressor on out-of-view keypoints')
+parser.add_argument('-extra_channel', action='store_true', help='whether to append an extra channel that masks the bbox')
 parser.add_argument('-confid_filter', action='store_true', help='whether to threshold uncertain keypoints off')
 parser.add_argument('-static_filter', action='store_true', help='whether to threshold static frames off')
 parser.add_argument('-joint_space', action='store_true', help='whether to allow joint-space train data')

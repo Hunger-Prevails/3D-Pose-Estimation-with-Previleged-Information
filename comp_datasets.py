@@ -42,6 +42,7 @@ class Lecture(data.Dataset):
 
         self.geometry = args.geometry
         self.colour = args.colour
+        self.extra_channel = args.extra_channel
 
         self.mean = [0.485, 0.456, 0.406]
         self.dev = [0.229, 0.224, 0.225]
@@ -68,29 +69,48 @@ class Lecture(data.Dataset):
 
         roi_center = sample.bbox[:2] + sample.bbox[2:] / 2
         
-        roi_side = np.amax(sample.bbox[2:])
+        far_dist = np.amax(sample.bbox[2:])
+
+        near_dist = np.amin(sample.bbox[2:])
+
+        vertical = np.argmin(sample.bbox[2:]) == 0
 
         if self.geometry:
-            roi_center += np.random.uniform(-0.05, 0.05, size = 2) * sample.bbox[2:]
-
             image, new_coords = mat_utils.rand_rotate(center = roi_center, image = image, points = image_coords[:, :2], max_radian = np.pi / 9)
 
             image_coords = np.hstack(new_coords, image_coords[:, 2:])
 
-            roi_side *= np.random.uniform(self.random_zoom, self.random_zoom ** (-1))
+            far_dist *= np.random.uniform(self.random_zoom, self.random_zoom ** (-1))
 
-        roi_side = int(np.round(roi_side))
+        roi_begin = (roi_center - far_dist / 2).astype(np.int)
 
-        roi_begin = (roi_center - roi_side / 2).astype(np.int)
-        roi_end = roi_begin + roi_side
+        far_dist = int(np.round(far_dist))
 
-        scale_factor = self.side_in / float(roi_side)
+        roi_end = roi_begin + far_dist
+
+        scale_factor = self.side_in / float(far_dist)
 
         image_coords[:, :2] = (image_coords[:, :2] - roi_begin) * scale_factor
 
         image = cv2.resize(image[roi_begin[1]:roi_end[1], roi_begin[0]:roi_end[0]], (self.side_in, self.side_in))
 
         feed_in = self.transform(augment_color(image)) if self.colour else self.transform(image)
+
+        if self.extra_channel:
+
+            channel = np.zeros((self.side_in, self.side_in, 1))
+
+            near_dist *= scale_factor
+
+            near_in = int(np.round((self.side_in - near_dist) / 2.0))
+            near_out = int(np.round((self.side_in + near_dist) / 2.0))
+
+            if vertical:
+                channel[:, near_in:near_out] = 1.0
+            else:
+                channel[near_in:near_out, :] = 1.0
+
+            feed_in = np.concatenate([feed_in, channel.transpose(2, 0, 1)])
 
         image_coords = self.mapper.map_coord(image_coords)
 
@@ -130,13 +150,16 @@ class Exam(data.Dataset):
         border = np.array(image.shape[:2])[::-1]
 
         roi_center = sample.bbox[:2] + sample.bbox[2:] / 2
-        
-        roi_side = int(np.round(np.amax(sample.bbox[2:])))
 
-        roi_begin = (roi_center - roi_side / 2).astype(np.int)
-        roi_end = roi_begin + roi_side
+        far_dist = np.amax(sample.bbox[2:])
 
-        scale_factor = self.side_in / roi_side
+        roi_begin = (roi_center - far_dist / 2).astype(np.int)
+
+        far_dist = int(np.round(far_dist))
+
+        roi_end = roi_begin + far_dist
+
+        scale_factor = self.side_in / float(far_dist)
 
         image_coords[:, :2] = (image_coords[:, :2] - roi_begin) * scale_factor
 

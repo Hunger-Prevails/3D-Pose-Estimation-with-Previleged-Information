@@ -39,6 +39,7 @@ class Lecture(data.Dataset):
         self.side_in = args.side_in
         self.random_zoom = args.random_zoom
         self.joint_space = args.joint_space
+        self.extra_channel = args.extra_channel
 
         self.geometry = args.geometry
         self.colour = args.colour
@@ -62,24 +63,25 @@ class Lecture(data.Dataset):
         width = np.array([sample.bbox[2] / 2, 0])
         height = np.array([0, sample.bbox[3] / 2])
 
-        if self.geometry:
-            center += np.random.uniform(-0.05, 0.05, size = 2) * sample.bbox[2:]
-
         if sample.bbox[2] < sample.bbox[3]:
-            box_verge = np.stack([center - height, center + height])
+            vertical = True
+            near_side = np.stack([center - width, center + width])
+            far_side = np.stack([center - height, center + height])
         else:
-            box_verge = np.stack([center - width, center + width])
+            vertical = False
+            far_side = np.stack([center - width, center + width])
+            near_side = np.stack([center - height, center + height])
 
         camera = copy.deepcopy(sample.camera)
         camera.turn_towards(center)
         camera.undistort()
         camera.square_pixels()
 
-        box_verge = sample.camera.image_to_world(box_verge)
-        box_verge = camera.world_to_image(box_verge)
-        side_crop = np.linalg.norm(box_verge[0] - box_verge[1])
+        far_side = camera.world_to_image(sample.camera.image_to_world(far_side))
 
-        camera.zoom(self.side_in / side_crop)
+        far_dist = np.linalg.norm(far_side[0] - far_side[1])
+
+        camera.zoom(self.side_in / far_dist)
         camera.center_principal((self.side_in, self.side_in))
 
         if self.geometry:
@@ -103,6 +105,22 @@ class Lecture(data.Dataset):
         image = cameralib.reproject_image(image, sample.camera, camera, (self.side_in, self.side_in))
 
         image = self.transform(self.augment(image))
+
+        if self.extra_channel:
+            channel = np.zeros((self.side_in, self.side_in, 1))
+
+            near_side = camera.world_to_image(sample.camera.image_to_world(near_side))
+            near_dist = np.linalg.norm(near_side[0] - near_side[1])
+
+            near_in = int(np.round((self.side_in - near_dist) / 2.0))
+            near_out = int(np.round((self.side_in + near_dist) / 2.0))
+
+            if vertical:
+                channel[:, near_in:near_out] = 1.0
+            else:
+                channel[near_in:near_out, :] = 1.0
+
+            image = np.concatenate([image, channel.transpose(2, 0, 1)])
 
         if self.joint_space:
             return image, camera_coords, image_coords, np.uint8(sample.confid), np.uint8(sample.valid), camera.intrinsics
@@ -135,6 +153,7 @@ class Exam(data.Dataset):
 
         self.side_in = args.side_in
         self.joint_space = args.joint_space
+        self.extra_channel = args.extra_channel
 
         self.samples = samples
 
@@ -152,20 +171,24 @@ class Exam(data.Dataset):
         height = np.array([0, sample.bbox[3] / 2])
 
         if sample.bbox[2] < sample.bbox[3]:
-            box_verge = np.stack([center - height, center + height])
+            vertical = True
+            near_side = np.stack([center - width, center + width])
+            far_side = np.stack([center - height, center + height])
         else:
-            box_verge = np.stack([center - width, center + width])
+            vertical = False
+            far_side = np.stack([center - width, center + width])
+            near_side = np.stack([center - height, center + height])
 
         camera = copy.deepcopy(sample.camera)
         camera.turn_towards(center)
         camera.undistort()
         camera.square_pixels()
 
-        box_verge = sample.camera.image_to_world(box_verge)
-        box_verge = camera.world_to_image(box_verge)
-        side_crop = np.linalg.norm(box_verge[0] - box_verge[1])
+        far_side = camera.world_to_image(sample.camera.image_to_world(far_side))
 
-        camera.zoom(self.side_in / side_crop)
+        far_dist = np.linalg.norm(far_side[0] - far_side[1])
+
+        camera.zoom(self.side_in / far_dist)
         camera.center_principal((self.side_in, self.side_in))
 
         world_coords = sample.body_pose
@@ -176,6 +199,22 @@ class Exam(data.Dataset):
         image = jpeg4py.JPEG(sample.image_path).decode()
         image = cameralib.reproject_image(image, sample.camera, camera, (self.side_in, self.side_in))
         image = self.transform(image.copy())
+
+        if self.extra_channel:
+            channel = np.zeros((self.side_in, self.side_in, 1))
+
+            near_side = camera.world_to_image(sample.camera.image_to_world(near_side))
+            near_dist = np.linalg.norm(near_side[0] - near_side[1])
+
+            near_in = int(np.round((self.side_in - near_dist) / 2.0))
+            near_out = int(np.round((self.side_in + near_dist) / 2.0))
+
+            if vertical:
+                channel[:, near_in:near_out] = 1.0
+            else:
+                channel[near_in:near_out, :] = 1.0
+
+            image = np.concatenate([image, channel.transpose(2, 0, 1)])
 
         back_rotation = np.matmul(sample.camera.R, camera.R.T)
 

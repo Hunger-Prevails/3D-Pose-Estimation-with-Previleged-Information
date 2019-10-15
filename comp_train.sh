@@ -3,7 +3,7 @@ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/liu/Downloads/libjpeg-turbo/lib64
 
 export CUDA_VISIBLE_DEVICES=0
 python main.py \
-				-do_complement \
+				-do_company \
 				-half_acc \
 				-shuffle \
 				-save_record \
