@@ -165,3 +165,84 @@ mpii_cmu_match = dict(
 		('lWrist', 'lWrist')
 	]
 )
+
+mpii_h36m_match = dict(
+	[
+		('rAnkle', 'rank'),
+		('rKnee', 'rkne'),
+		('rHip', 'rhip'),
+		('lHip', 'lhip'),
+		('lKnee', 'lkne'),
+		('lAnkle', 'lank'),
+		('Pelvis', 'pelv'),
+		('Thorax', 'neck'),
+		('rWrist', 'rwri'),
+		('rElbow', 'relb'),
+		('rShoulder', 'rsho'),
+		('lShoulder', 'lsho'),
+		('lElbow', 'lelb'),
+		('lWrist', 'lwri')
+	]
+)
+
+h36m_short_names = [
+	'rhip',
+	'rkne',
+	'rank',
+	'lhip',
+	'lkne',
+	'lank',
+	'tors',
+	'neck',
+	'head',
+	'htop',
+	'lsho',
+	'lelb',
+	'lwri',
+	'rsho',
+	'relb',
+	'rwri',
+	'pelv'
+]
+
+h36m_parent = dict(
+	[
+		('htop', 'head'),
+		('head', 'neck'),
+		('lsho', 'neck'),
+		('lelb', 'lsho'),
+		('lwri', 'lelb'),
+		('rsho', 'neck'),
+		('relb', 'rsho'),
+		('rwri', 'relb'),
+		('neck', 'tors'),
+		('tors', 'pelv'),
+		('lhip', 'pelv'),
+		('lkne', 'lhip'),
+		('lank', 'lkne'),
+		('rhip', 'pelv'),
+		('rkne', 'rhip'),
+		('rank', 'rkne')
+	]
+)
+
+h36m_mirror = dict(
+	[
+		('lsho', 'rsho'),
+		('rsho', 'lsho'),
+		('lelb', 'relb'),
+		('relb', 'lelb'),
+		('lwri', 'rwri'),
+		('rwri', 'lwri'),
+		('lhip', 'rhip'),
+		('rhip', 'lhip'),
+		('lkne', 'rkne'),
+		('rkne', 'lkne'),
+		('lank', 'rank'),
+		('rank', 'lank')
+	]
+)
+
+h36m_cam_names = ['54138969', '55011271', '58860488', '60457274']
+h36m_key_foots = [1, 2, 3, 6, 7, 8, 12, 13, 14, 15, 17, 18, 19, 25, 26, 27, 0]
+h36m_base_joint = 'pelv'

@@ -1,14 +1,20 @@
 import os
+import h5py
 import jpeg4py
+import itertools
 import json
 import cv2
 import copy
 import numpy as np
 import cameralib
+import transforms3d
 import multiprocessing
+import spacepy.pycdf as pycdf
+import xml.etree.ElementTree as ElementTree
 
 from utils import JointInfo
 from utils import PoseSample
+from builtins import zip as xzip
 
 
 def get_cameras(json_file, cam_names):
@@ -36,10 +42,8 @@ def get_cameras(json_file, cam_names):
 def make_sample(paths, annos, args):
 	'''
 	params
-		bbox: (4,) bounding box in original camera view
-		body_pose: (19 x 3) joint coords in world space
 		image_coord: (19 x 3) joint coords in image space with confidence scores
-		image_path: path to image under original camera view
+		body_pose: (19 x 3) joint coords in world space
 	returns
 		pose sample with path to down-scaled image and corresponding box/image_coord
 	'''
@@ -297,5 +301,190 @@ def get_cmu_group(phase, args):
 
 	samples = [process.get() for process in processes]
 	samples = [sample for sample in samples if sample]
+
+	return data_info, samples
+
+
+def load_coords(path, key_foots, stride):
+
+	coords_raw = pycdf.CDF(path)['Pose']
+	coords_raw = np.array(coords_raw, np.float32)[0]
+	coords_raw = coords_raw.reshape((coords_raw.shape[0], -1, 3))
+
+	return coords_raw.shape[0], coords_raw[::stride, key_foots]
+
+
+def collect_data(root_part, activity, camera_id, stride):
+
+	from joint_settings import h36m_cam_names as cam_names
+	from joint_settings import h36m_key_foots as key_foots
+
+	root_pose = os.path.join(root_part, 'MyPoseFeatures')
+	path_coords = os.path.join(root_pose, 'D3_Positions', activity + '.cdf')
+
+	n_frames, body_poses = load_coords(path_coords, key_foots, stride)
+
+	root_image = os.path.join(root_part, 'Images', activity + '.' + cam_names[camera_id])
+
+	image_paths = ['frame_' + str(x).zfill(6) + '.jpg' for x in xrange(0, n_frames, stride)]
+	image_paths = [os.path.join(root_image, path) for path in image_paths]
+
+	path_bbox = os.path.join(root_part, 'BBoxes', activity + '.' + cam_names[camera_id] + '.h5')
+
+	bboxes = h5py.File(path_bbox)['bboxes'][::stride]
+
+	return image_paths, body_poses, bboxes
+
+
+def get_h36m_cameras(metadata):
+
+	def make_h36m_camera(extrinsics, intrinsics):
+		x_angle, y_angle, z_angle = extrinsics[0:3]
+		R = transforms3d.euler.euler2mat(x_angle, y_angle, z_angle, 'rxyz')
+
+		t = extrinsics[3:6]
+		f = intrinsics[:2]
+		c = intrinsics[2:4]
+		k = intrinsics[4:7]
+		p = intrinsics[7:]
+
+		distorts = np.array([k[0], k[1], p[0], p[1], k[2]], np.float32)
+		intrinsics = np.array([[f[0], 0, c[0]], [0, f[1], c[1]], [0, 0, 1]], np.float32)
+
+		return cameralib.Camera(t, R, intrinsics, distorts)
+
+	root = ElementTree.parse(metadata).getroot()
+
+	cam_params_text = root.findall('w0')[0].text
+
+	numbers = np.array([float(x) for x in cam_params_text[1:-1].split(' ')])
+
+	extrinsic = numbers[:264].reshape(4, 11, 6)
+	intrinsic = numbers[264:].reshape(4, 9)
+
+	return [
+		[
+			make_h36m_camera(extrinsic[camera_id, partition], intrinsic[camera_id]) for partition in xrange(11)
+		] for camera_id in xrange(4)
+	]
+
+
+def make_h36m_sample(paths, annos, args):
+	'''
+	params
+		bbox: (4,) bounding box in original camera view
+		body_pose: (19 x 3) joint coords in world space
+		image_coord: (19 x 3) joint coords in image space with confidence scores
+		image_path: path to image under original camera view
+	returns
+		pose sample with path to down-scaled image and corresponding box/image_coord
+	'''
+	image_path, new_path = paths
+	bbox, body_pose, camera = annos
+
+	valid = np.ones(args.num_joints).astype(np.bool)
+
+	confid = valid.copy()
+
+	expand_side = np.sum((bbox[2:] / args.random_zoom) ** 2) ** 0.5
+
+	box_center = bbox[:2] + bbox[2:] / 2
+
+	scale_factor = min(args.side_in / np.max(bbox[2:]) / args.random_zoom, 1.0)
+
+	dest_side = int(np.round(expand_side * scale_factor))
+
+	new_camera = copy.deepcopy(camera)
+	new_camera.shift_to_center(box_center, (expand_side, expand_side))
+	new_camera.scale_output(scale_factor)
+
+	new_bbox = cameralib.reproject_points(bbox[None, :2], camera, new_camera)[0]
+
+	new_bbox = np.concatenate((new_bbox, bbox[2:] * scale_factor))
+
+	if not os.path.exists(new_path):
+
+		image = jpeg4py.JPEG(image_path).decode()
+
+		new_image = cameralib.reproject_image(image, camera, new_camera, (dest_side, dest_side))
+
+		cv2.imwrite(new_path, new_image[:, :, ::-1])
+
+	return PoseSample(new_path, body_pose, valid, new_bbox, new_camera, confid)
+
+
+def get_h36m_group(phase, args):
+
+	assert os.path.isdir(args.data_down_path)
+
+	cameras = get_h36m_cameras(os.path.join(args.data_root_path, 'metadata.xml'))
+
+	from joint_settings import h36m_short_names as short_names
+	from joint_settings import h36m_parent as parent
+	from joint_settings import h36m_mirror as mirror
+
+	mapper = dict(zip(short_names, range(len(short_names))))
+
+	map_mirror = [mapper[mirror[name]] for name in short_names if name in mirror]
+	map_parent = [mapper[parent[name]] for name in short_names if name in parent]
+
+	_mirror = np.arange(len(short_names))
+	_parent = np.arange(len(short_names))
+
+	_mirror[np.array([name in mirror for name in short_names])] = np.array(map_mirror)
+	_parent[np.array([name in parent for name in short_names])] = np.array(map_parent)
+
+	data_info = JointInfo(short_names, parents, mirror)
+
+	partitions = dict(
+		train = [1, 5, 6, 7, 8],
+		validation = [9, 11],
+		test = [9, 11]
+	)
+	stride = dict(
+		train = 5,
+		validation = 5,
+		test = 64
+	)
+	def cond(root_path, elem):
+		return os.path.isdir(os.path.join(root_path, elem)) and '_' not in elem
+
+	processes = []
+
+	pool = multiprocessing.Pool(args.num_processes)
+
+	for partition in phases[phase]:
+
+		root_part = os.path.join(args.data_root_path, 'S' + str(partition))
+		root_image = os.path.join(root_part, 'Images')
+
+		activities = [elem for elem in os.listdir(root_image) if cond(root_image, elem)]
+		activities = set([elem.split('.')[0] for elem in activities])
+
+		for index, (activity, camera_id) in enumerate(itertools.product(activities, range(4))):
+
+			if partition == 11 and activity == 'Directions' and camera_id == 0:
+				continue
+
+			camera = cameras[camera_id][partition - 1]
+
+			print 'collecting samples', str(index) + '/' + str(len(activities) * 4), 'partition', partition
+
+			image_paths, body_poses, bboxes = collect_data(root_part, activity, camera_id, stride[phase])
+
+			down_path = str(partition) + '.' + activity.replace(' ', '-') + '.' + str(camera_id)
+			down_path = os.path.join(args.data_down_path, down_path)
+
+			new_paths = [os.path.join(down_path, os.path.basename(path)) for path in image_paths]
+
+			if not os.path.exists(down_path):
+				os.mkdir(down_path)
+
+			for image_path, new_path, body_pose, bbox in xzip(image_paths, new_paths, body_poses, bboxes):
+				processes.append(pool.apply_async(func = make_h36m_sample, args = (image_path, new_path, body_pose, bbox, args)))
+
+	pool.close()
+	pool.join()
+	samples = [process.get() for process in processes]
 
 	return data_info, samples
