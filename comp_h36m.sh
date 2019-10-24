@@ -6,7 +6,6 @@ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/home/liu/Downloads/libjpeg-turbo/lib64
 export CUDA_VISIBLE_DEVICES=0
 
 python main.py \
-				-extra_channel \
 				-do_company \
 				-half_acc \
 				-shuffle \
@@ -19,10 +18,10 @@ python main.py \
 				-do_attention \
 				-model resnet50 \
 				-model_path /home/liu/pose_track/models/resnet50.pth \
-				-suffix do_atn_h36m_comp_half_ec \
+				-suffix do_atn_h36m_mpii \
 				-data_name h36m \
 				-comp_name mpii \
-				-data_root_path /globalwork/sarandi/data/h36m \
+				-data_root_path /globalwork/data/human3.6m \
 				-comp_root_path /globalwork/data/mpii \
 				-data_down_path /globalwork/liu/h36m_down \
 				-comp_down_path /globalwork/liu/mpii_down \

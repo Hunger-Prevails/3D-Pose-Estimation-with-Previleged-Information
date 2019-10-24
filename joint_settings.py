@@ -222,7 +222,8 @@ h36m_parent = dict(
 		('lank', 'lkne'),
 		('rhip', 'pelv'),
 		('rkne', 'rhip'),
-		('rank', 'rkne')
+		('rank', 'rkne'),
+		('pelv', 'pelv')
 	]
 )
 

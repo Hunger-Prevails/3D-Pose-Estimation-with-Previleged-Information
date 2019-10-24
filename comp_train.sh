@@ -16,7 +16,7 @@ python main.py \
 				-do_attention \
 				-model resnet50 \
 				-model_path /home/liu/pose_track/models/resnet50.pth \
-				-suffix do_atn_full_comp_half_oov \
+				-suffix do_atn_full_mpii_oov \
 				-data_name cmu \
 				-comp_name mpii \
 				-data_root_path /globalwork/data/cmu-panoptic \

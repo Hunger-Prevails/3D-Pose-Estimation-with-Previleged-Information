@@ -55,6 +55,10 @@ def get_mpii_group(phase, args):
 		image_path = os.path.join(args.comp_root_path, 'images', annotation['image'])
 
 		for sid, sample in enumerate(annotation['samples']):
+			'''
+			if sid not in annotation['singles']:
+				continue
+			'''
 			down_path = os.path.join(args.comp_down_path, str(aid) + '_' + str(sid) + '.jpg')
 
 			if sample:

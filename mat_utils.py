@@ -127,12 +127,14 @@ def rand_rotate(center, image, points, max_radian):
 		image: the image to be rotated
 		points: (num_joints, 2) the points within the image to be rotated
 	'''
+	center = tuple(center.astype(np.int))
+
 	radian = np.random.uniform(-max_radian, max_radian)
 
 	matrix = cv2.getRotationMatrix2D(center, angle = radian * 180 / np.pi, scale = 1.0)
 
-	dest = cv2.warpAffine(image, maxtrx, image.shape[:2][::-1])
+	dest = cv2.warpAffine(image, matrix, image.shape[:2][::-1])
 
-	trans = np.matmul(np.hstack(points, np.ones((points.shape[0], 1))), matrix.T)
+	trans = np.matmul(np.hstack([points, np.ones((points.shape[0], 1))]), matrix.T)
 
 	return dest, trans

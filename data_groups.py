@@ -10,6 +10,8 @@ import cameralib
 import transforms3d
 import multiprocessing
 import spacepy.pycdf as pycdf
+import matplotlib.pyplot as plt
+import matplotlib.patches as patches
 import xml.etree.ElementTree as ElementTree
 
 from utils import JointInfo
@@ -329,11 +331,11 @@ def collect_data(root_part, activity, camera_id, stride):
 	image_paths = ['frame_' + str(x).zfill(6) + '.jpg' for x in xrange(0, n_frames, stride)]
 	image_paths = [os.path.join(root_image, path) for path in image_paths]
 
-	path_bbox = os.path.join(root_part, 'BBoxes', activity + '.' + cam_names[camera_id] + '.h5')
+	path_bbox = os.path.join(root_part, 'BBoxes', activity + '.' + cam_names[camera_id] + '.npy')
 
-	bboxes = h5py.File(path_bbox)['bboxes'][::stride]
+	bboxes = np.load(path_bbox)[::stride]
 
-	return image_paths, body_poses, bboxes
+	return image_paths, body_poses / 10.0, bboxes
 
 
 def get_h36m_cameras(metadata):
@@ -342,7 +344,7 @@ def get_h36m_cameras(metadata):
 		x_angle, y_angle, z_angle = extrinsics[0:3]
 		R = transforms3d.euler.euler2mat(x_angle, y_angle, z_angle, 'rxyz')
 
-		t = extrinsics[3:6]
+		t = extrinsics[3:6] / 10.0
 		f = intrinsics[:2]
 		c = intrinsics[2:4]
 		k = intrinsics[4:7]
@@ -422,6 +424,7 @@ def get_h36m_group(phase, args):
 	from joint_settings import h36m_short_names as short_names
 	from joint_settings import h36m_parent as parent
 	from joint_settings import h36m_mirror as mirror
+	from joint_settings import h36m_base_joint as base_joint
 
 	mapper = dict(zip(short_names, range(len(short_names))))
 
@@ -434,16 +437,20 @@ def get_h36m_group(phase, args):
 	_mirror[np.array([name in mirror for name in short_names])] = np.array(map_mirror)
 	_parent[np.array([name in parent for name in short_names])] = np.array(map_parent)
 
-	data_info = JointInfo(short_names, parents, mirror)
+	weight = np.ones(args.num_joints)
+
+	essence = weight.astype(np.bool)
+
+	data_info = JointInfo(short_names, _parent, _mirror, mapper[base_joint], weight, essence)
 
 	partitions = dict(
 		train = [1, 5, 6, 7, 8],
-		validation = [9, 11],
+		valid = [9, 11],
 		test = [9, 11]
 	)
 	stride = dict(
 		train = 5,
-		validation = 5,
+		valid = 64,
 		test = 64
 	)
 	def cond(root_path, elem):
@@ -453,7 +460,7 @@ def get_h36m_group(phase, args):
 
 	pool = multiprocessing.Pool(args.num_processes)
 
-	for partition in phases[phase]:
+	for partition in partitions[phase]:
 
 		root_part = os.path.join(args.data_root_path, 'S' + str(partition))
 		root_image = os.path.join(root_part, 'Images')
@@ -481,10 +488,62 @@ def get_h36m_group(phase, args):
 				os.mkdir(down_path)
 
 			for image_path, new_path, body_pose, bbox in xzip(image_paths, new_paths, body_poses, bboxes):
-				processes.append(pool.apply_async(func = make_h36m_sample, args = (image_path, new_path, body_pose, bbox, args)))
+
+				paths = (image_path, new_path)
+				annos = (bbox, body_pose, camera)
+
+				processes.append(pool.apply_async(func = make_h36m_sample, args = (paths, annos, args)))
 
 	pool.close()
 	pool.join()
 	samples = [process.get() for process in processes]
 
 	return data_info, samples
+
+
+def show_skeleton(image, image_coord, confidence, message = '', bbox = None):
+	'''
+	Shows coco19 skeleton(mat)
+
+	Args:
+		image: path to image
+		image_coord: (2, num_joints)
+		confidence: (num_joints,)
+	'''
+	image = plt.imread(image) if isinstance(image, str) else image
+
+	plt.figure(figsize = (12, 8))
+
+	from joint_settings import h36m_short_names as short_names
+	from joint_settings import h36m_parent as parent
+
+	mapper = dict(zip(short_names, range(len(short_names))))
+
+	body_edges = [mapper[parent[name]] for name in short_names]
+	body_edges = np.hstack(
+		[
+			np.arange(len(body_edges)).reshape(-1, 1),
+			np.array(body_edges).reshape(-1, 1)
+		]
+	)
+	ax = plt.subplot(1, 1, 1)
+	plt.title(message + ':' + str(image.shape))
+	plt.imshow(image)
+	ax.set_autoscale_on(False)
+
+	valid = (0.1 <= confidence)
+
+	plt.plot(image_coord[0, valid], image_coord[1, valid], '.')
+
+	for edge in body_edges:
+		if valid[edge[0]] and valid[edge[1]]:
+			plt.plot(image_coord[0, edge], image_coord[1, edge])
+
+	plt.plot(np.mean(image_coord[0, valid]), np.mean(image_coord[1, valid]), 'X', color = 'w')
+
+	if bbox is not None:
+		rect = patches.Rectangle((bbox[0], bbox[1]), bbox[2], bbox[3], linewidth = 2, edgecolor = 'r', facecolor = 'none')
+		ax.add_patch(rect)
+
+	plt.draw()
+	plt.show()

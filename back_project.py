@@ -61,11 +61,10 @@ def show_skeleton(image, image_coord, confidence, message = '', bbox = None):
             np.array(body_edges).reshape(-1, 1)
         ]
     )
-    fig = plt.subplot(1, 1, 1)
+    ax = plt.subplot(1, 1, 1)
     plt.title(message + ':' + str(image.shape))
     plt.imshow(image)
-    currentAxis = plt.gca()
-    currentAxis.set_autoscale_on(False)
+    ax.set_autoscale_on(False)
 
     valid = (0.1 <= confidence)
 
@@ -79,7 +78,7 @@ def show_skeleton(image, image_coord, confidence, message = '', bbox = None):
 
     if bbox is not None:
         rect = patches.Rectangle((bbox[0], bbox[1]), bbox[2], bbox[3], linewidth = 2, edgecolor = 'r', facecolor = 'none')
-        fig.add_patch(rect)
+        ax.add_patch(rect)
 
     plt.draw()
     plt.show()

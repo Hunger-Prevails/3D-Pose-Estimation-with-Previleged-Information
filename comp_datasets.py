@@ -78,9 +78,12 @@ class Lecture(data.Dataset):
         if self.geometry:
             image, new_coords = mat_utils.rand_rotate(center = roi_center, image = image, points = image_coords[:, :2], max_radian = np.pi / 9)
 
-            image_coords = np.hstack(new_coords, image_coords[:, 2:])
+            image_coords = np.hstack([new_coords, image_coords[:, 2:]])
 
-            far_dist *= np.random.uniform(self.random_zoom, self.random_zoom ** (-1))
+            zoom = np.random.uniform(self.random_zoom, 1.0)
+
+            far_dist *= zoom
+            near_dist *= zoom
 
         roi_begin = (roi_center - far_dist / 2).astype(np.int)
 
