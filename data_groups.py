@@ -218,11 +218,13 @@ def get_cmu_group(phase, args):
 
 		root_image = os.path.join(root_seq, 'hdImgs')
 
-		cam_folders = [os.path.join(root_image, folder) for folder in os.listdir(root_image)]
-		cam_folders = [folder for folder in cam_folders if os.path.isdir(folder)]
-		cam_folders.sort()
+		cam_names = [
+			'00_00', '00_03', '00_05', '00_08', '00_09', '00_11', '00_12', '00_14', '00_15', '00_16',
+			'00_18', '00_20', '00_21', '00_22', '00_23', '00_24', '00_25', '00_26', '00_27', '00_29'
+		]
+		cam_names = [cam_name for cam_name in cam_names if os.path.isdir(os.path.join(root_image, cam_name))]
 
-		cam_names = [os.path.basename(folder) for folder in cam_folders]
+		cam_folders = [os.path.join(root_image, cam_name) for cam_name in cam_names]
 
 		cam_files = [os.path.join(root_image, 'image_coord_' + cam_name + '.json') for cam_name in cam_names]
 		cam_files = [json.load(open(file)) for file in cam_files]

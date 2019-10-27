@@ -16,7 +16,7 @@ class PoseSample:
 
 
 class JointInfo:
-	def __init__(self, short_names, parent, mirror, key_index, weight, essence):
+	def __init__(self, short_names, parent, mirror, key_index, weight = None, essence = None):
 		self.short_names = short_names
 		self.parent = parent
 		self.mirror = mirror

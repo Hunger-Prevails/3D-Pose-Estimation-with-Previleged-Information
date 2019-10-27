@@ -52,7 +52,6 @@ class Trainer:
         self.depth_range = args.depth_range
 
         self.half_acc = args.half_acc
-        self.flip_test = args.flip_test
         self.joint_space = args.joint_space
         self.do_track = args.do_track
         self.do_attention = args.do_attention
@@ -182,7 +181,7 @@ class Trainer:
 
                 recon_loss_avg += recon_loss.item() * batch
 
-                loss = loss * 0.5 + recon_loss
+                loss = loss + recon_loss * 0.5
 
             if self.half_acc:
                 loss *= self.grad_scaling
@@ -597,23 +596,6 @@ class Trainer:
 
                 heat_cam = utils.to_heatmap(cam_feat, self.depth, self.num_joints, side_out, side_out)
 
-                if self.flip_test:
-                    _cam_feat, _mat_feat, _attention = self.model(image[:, :, :, ::-1])
-
-                    attention = 0.5 * (attention + _attention[:, self.data_info.mirror])
-
-                    _heat_mat = mat_utils.to_heatmap(_mat_feat, self.num_joints, side_out, side_out)
-
-                    _heat_mat = _heat_mat[:, self.data_info.mirror, :, ::-1]
-
-                    heat_mat = 0.5 * (heat_mat + _heat_mat)
-
-                    _heat_cam = utils.to_heatmap(_cam_feat, self.depth, self.num_joints, side_out, side_out)
-
-                    _heat_cam = _heat_cam[:, self.data_info.mirror, :, ::-1]
-
-                    heat_cam = 0.5 * (heat_cam + _heat_cam)
-
                 spec_mat = mat_utils.decode(heat_mat, self.side_in)
 
                 key_index = self.data_info.key_index
@@ -718,22 +700,6 @@ class Trainer:
 
                 heat_cam = utils.to_heatmap(cam_feat, self.depth, self.num_joints, side_out, side_out)
 
-                if self.flip_test:
-
-                    _cam_feat, _mat_feat = self.model(image[:, :, :, ::-1])
-
-                    _heat_mat = mat_utils.to_heatmap(_mat_feat, self.num_joints, side_out, side_out)
-
-                    _heat_mat = _heat_mat[:, self.data_info.mirror, :, ::-1]
-
-                    heat_mat = 0.5 * (heat_mat + _heat_mat)
-
-                    _heat_cam = utils.to_heatmap(_cam_feat, self.depth, self.num_joints, side_out, side_out)
-
-                    _heat_cam = _heat_cam[:, self.data_info.mirror, :, ::-1]
-
-                    heat_cam = 0.5 * (heat_cam + _heat_cam)
-
                 spec_mat = mat_utils.decode(heat_mat, self.side_in)
 
                 key_index = self.data_info.key_index
@@ -834,14 +800,6 @@ class Trainer:
                 cam_feat = self.model(image)
 
                 heat_cam = utils.to_heatmap(cam_feat, self.depth, self.num_joints, side_out, side_out)
-
-                if self.flip_test:
-                    _cam_feat = self.model(image[:, :, :, ::-1])
-
-                    _heat_cam = utils.to_heatmap(_cam_feat, self.depth, self.num_joints, side_out, side_out)
-                    _heat_cam = _heat_cam[:, self.data_info.mirror, :, ::-1]
-
-                    heat_cam = 0.5 * (heat_cam + _heat_cam)
 
                 key_index = self.data_info.key_index
 
