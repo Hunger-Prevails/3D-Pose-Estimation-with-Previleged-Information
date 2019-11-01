@@ -65,7 +65,7 @@ def fetch_occluders(occ_idx, occ_path):
     return occluder, mask
 
 
-def augment_object(image, occ_count, occ_path):
+def random_occlu(image, occ_count, occ_path):
     occ_idx = np.random.choice(occ_count)
 
     occluder, occ_mask = fetch_occluders(occ_idx, occ_path)

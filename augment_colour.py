@@ -45,9 +45,9 @@ def augment_saturation(image, space):
     return image, 'hsv'
 
 
-def augment_color(image):
+def random_color(image):
     '''
-    performs color augmentation for the given image
+    performs random colour augmentation for the given image
 
     Args:
         image: 3-channel rgb image in range [0, 256)

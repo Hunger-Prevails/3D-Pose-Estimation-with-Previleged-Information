@@ -12,9 +12,9 @@ import torch.utils.data as data
 
 from torchvision import datasets
 from torchvision import transforms
-from augment_colour import augment_color
+from augment_colour import random_color
 from augment_occluder import random_erase
-from augment_occluder import augment_object
+from augment_occluder import random_occlu
 
 
 def get_data_loader(args, phase):
@@ -130,13 +130,13 @@ class Lecture(data.Dataset):
     def augment(self, image):
 
         if self.occluder and np.random.uniform() < 0.2:
-            image = augment_object(image, self.occ_count, self.occ_path)
+            image = random_occlu(image, self.occ_count, self.occ_path)
 
         if self.eraser and np.random.uniform() < 0.2:
             image = random_erase(image)
 
         if self.colour and np.random.uniform() < 0.9:
-            image = augment_color(image)
+            image = random_color(image)
 
         return image
 

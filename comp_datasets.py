@@ -12,7 +12,7 @@ import torch.utils.data as data
 from mat_utils import Mapper
 from torchvision import datasets
 from torchvision import transforms
-from augment_colour import augment_color
+from augment_colour import random_color
 
 
 def get_comp_loader(args, phase, dest_info):
@@ -97,7 +97,7 @@ class Lecture(data.Dataset):
 
         image = cv2.resize(image[roi_begin[1]:roi_end[1], roi_begin[0]:roi_end[0]], (self.side_in, self.side_in))
 
-        feed_in = self.transform(augment_color(image)) if self.colour else self.transform(image)
+        feed_in = self.transform(random_color(image)) if self.colour else self.transform(image)
 
         if self.extra_channel:
 
