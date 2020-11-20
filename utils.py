@@ -16,13 +16,11 @@ class PoseSample:
 
 
 class JointInfo:
-	def __init__(self, short_names, parent, mirror, key_index, weight = None, essence = None):
+	def __init__(self, short_names, parent, mirror, key_index):
 		self.short_names = short_names
 		self.parent = parent
 		self.mirror = mirror
 		self.key_index = key_index
-		self.weight = weight
-		self.essence = essence
 
 
 def to_heatmap(ausgabe, depth, num_joints, height, width):
@@ -170,21 +168,20 @@ def least_square(A, b, weight):
 	return np.linalg.solve(np.dot(A.T, A), np.dot(A.T, b))
 
 
-def get_deter_cam(spec_mat, relat_cam, valid, intrinsics, attention):
+def get_deter_cam(spec_mat, relat_cam, intrinsics):
 	'''
-	reconstructs the reference point location at train time.
+	reconstructs the reference point location at test time.
 
 	Args:
 		spec_mat: (batch_size, num_joints, 2) estimated image coordinates
 		relat_cam: (batch_size, num_joints, 3) estimated relative camera coordinates with respect to an unknown reference point
-		valid: (batch_size, num_joints)
 		intrinsics: (batch_size, 3, 3) camera intrinsics
-		attention: (batch_size, num_joints) attention weights
 
 	Returns:
 		(batch_size, num_joints, 3) estimation of camera coordinates
 	'''
-	dim_batch, dim_joint = valid.shape
+	dim_batch = spec_mat.shape[0]
+	dim_joint = spec_mat.shape[1]
 
 	assert (np.sum(valid, axis = 1) != 0).all()
 	assert (np.sum(valid, axis = 1) != 1).all()
@@ -203,12 +200,6 @@ def get_deter_cam(spec_mat, relat_cam, valid, intrinsics, attention):
 
 	b = (normalized * relat_cam[:, :, 2:] - relat_cam[:, :, :2]).reshape(dim_batch, -1, 1)  # (batch_size, num_joints x 2, 1)
 
-	attention = (valid * attention ** 0.5).reshape(-1, 1)  # (batch_size x num_joints, 1)
-	attention = np.tile(attention, (1, 2)).reshape(dim_batch, -1, 1)  # (batch_size, num_joints x 2, 1)
-
-	A = A * attention
-	b = b * attention
-
 	refer = np.linalg.inv(np.einsum('bij,bjk->bik', A.transpose(0, 2, 1), A))  # (batch_size, 3, 3)
 
 	refer = np.einsum('bij,bjk->bik', refer, np.einsum('bij,bjk->bik', A.transpose(0, 2, 1), b))  # (batch_size, 3, 1)
@@ -216,21 +207,20 @@ def get_deter_cam(spec_mat, relat_cam, valid, intrinsics, attention):
 	return relat_cam + refer.transpose(0, 2, 1)
 
 
-def get_recon_cam(spec_mat, relat_cam, valid, intrinsics, attention):
+def get_recon_cam(spec_mat, relat_cam, intrinsics):
 	'''
-	reconstructs the reference point location at train time.
+	fully differentiable reconstruction of the reference point location at train time.
 
 	Args:
 		spec_mat: (batch_size, num_joints, 2) estimated image coordinates
 		relat_cam: (batch_size, num_joints, 3) estimated relative camera coordinates with respect to an unknown reference point
-		valid: (batch_size, num_joints)
 		intrinsics: (batch_size, 3, 3) camera intrinsics
-		attention: (batch_size, num_joints) attention weights
 
 	Returns:
 		(batch_size, num_joints, 3) estimation of camera coordinates
 	'''
-	dim_batch, dim_joint = valid.size()
+	dim_batch = spec_mat.shape[0]
+	dim_joint = spec_mat.shape[1]
 
 	assert (torch.sum(valid, dim = 1) != 0).all()
 	assert (torch.sum(valid, dim = 1) != 1).all()
@@ -248,12 +238,6 @@ def get_recon_cam(spec_mat, relat_cam, valid, intrinsics, attention):
 	A = torch.cat([A, - normalized.contiguous().view(dim_batch, -1, 1)], dim = -1)  # (batch_size, num_joints x 2, 3)
 
 	b = (normalized * relat_cam[:, :, 2:] - relat_cam[:, :, :2]).view(dim_batch, -1, 1)  # (batch_size, num_joints x 2, 1)
-
-	attention = (valid.float() * attention ** 0.5).view(-1, 1)  # (batch_size x num_joints, 1)
-	attention = attention.repeat(1, 2).view(dim_batch, -1, 1)  # (batch_size, num_joints x 2, 1)
-
-	A = A * attention
-	b = b * attention
 
 	refer = torch.inverse(torch.einsum('bij,bjk->bik', A.permute(0, 2, 1), A))  # (batch_size, 3, 3)
 

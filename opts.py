@@ -16,7 +16,6 @@ parser.add_argument('-confid_filter', action='store_true', help='whether to thre
 parser.add_argument('-static_filter', action='store_true', help='whether to threshold static frames off')
 parser.add_argument('-joint_space', action='store_true', help='whether to allow joint-space train data')
 parser.add_argument('-do_track', action='store_true', help='whether to track cam coords via least square optim')
-parser.add_argument('-do_attention', action='store_true', help='whether to learn weights for reference joint regression')
 parser.add_argument('-do_company', action='store_true', help='whether to use complement dataset')
 
 # augmentation options

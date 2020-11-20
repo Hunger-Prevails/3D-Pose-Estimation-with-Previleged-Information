@@ -14,7 +14,6 @@ python main.py \
 				-static_filter \
 				-joint_space \
 				-do_track \
-				-do_attention \
 				-model resnet50 \
 				-model_path /home/liu/pose_track/models/model_5.pth \
 				-suffix do_atn_full_mpii_ecoov \

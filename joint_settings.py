@@ -62,33 +62,6 @@ cmu_mirror = dict(
 		('rEye', 'lEye')
 	]
 )
-cmu_weight = [
-	0.5268,
-	0.4613,
-	3.5125,
-	0.3597,
-	0.1922,
-	0.0778,
-	0.6934,
-	0.2874,
-	0.2256,
-	0.3401,
-	0.2030,
-	0.0838,
-	0.6925,
-	0.2833,
-	0.2213,
-	0.4622,
-	0.4530,
-	0.4642,
-	0.4597
-]
-cmu_overlook = [
-	'lWrist',
-	'lAnkle',
-	'rWrist',
-	'rAnkle'
-]
 cmu_base_joint = 'BodyCenter'
 
 mpii_short_names = [
