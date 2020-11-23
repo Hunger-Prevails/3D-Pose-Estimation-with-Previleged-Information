@@ -5,6 +5,7 @@ import itertools
 import json
 import cv2
 import copy
+import pickle
 import numpy as np
 import cameralib
 import transforms3d
@@ -495,9 +496,43 @@ def get_h36m_group(phase, args):
 	return data_info, samples
 
 
+def load_ntu_cameras(args):
+
+	with open(os.path.join(args.data_root_path, 'cameras.pkl'), 'rb') as file:
+		color_cameras = pickle.load(file)
+
+	with open(os.path.join(args.data_root_path, 'depth_cameras.pkl'), 'rb') as file:
+		depth_cameras = pickle.load(file)
+
+	return color_cameras, depth_cameras
+
 def get_ntu_group():
 
 	assert os.path.isdir(args.data_down_path)
+
+	color_cameras, depth_cameras = load_ntu_cameras(args)
+
+	from joint_settings import h36m_short_names as short_names
+	from joint_settings import h36m_parent as parent
+	from joint_settings import h36m_mirror as mirror
+	from joint_settings import h36m_base_joint as base_joint
+
+	mapper = dict(zip(short_names, range(len(short_names))))
+
+	map_mirror = [mapper[mirror[name]] for name in short_names if name in mirror]
+	map_parent = [mapper[parent[name]] for name in short_names if name in parent]
+
+	_mirror = np.arange(len(short_names))
+	_parent = np.arange(len(short_names))
+
+	_mirror[np.array([name in mirror for name in short_names])] = np.array(map_mirror)
+	_parent[np.array([name in parent for name in short_names])] = np.array(map_parent)
+
+	data_info = JointInfo(short_names, _parent, _mirror, mapper[base_joint])
+
+	processes = []
+
+	pool = multiprocessing.Pool(args.num_processes)
 
 
 def show_skeleton(image, image_coord, confidence, message = '', bbox = None):
