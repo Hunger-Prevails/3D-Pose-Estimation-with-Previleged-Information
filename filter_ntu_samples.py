@@ -1,6 +1,7 @@
 import os
 import sys
 import glob
+import utils
 import collections
 import pickle5 as pickle
 import boxlib
@@ -8,12 +9,6 @@ import cameralib
 import numpy as np
 import scipy
 import multiprocessing
-
-def groupby(items, key):
-	result = collections.defaultdict(list)
-	for item in items:
-		result[key(item)].append(item)
-	return result
 
 
 def get_cam_id(anno_file):
@@ -69,8 +64,6 @@ def filter_samples(anno_files, cam_id, camera, root_path):
 	samples = []
 
 	for anno_file in anno_files:
-		# print('handle video:', anno_file)
-
 		sample_count = 0
 
 		prev_poses = []
@@ -91,9 +84,9 @@ def filter_samples(anno_files, cam_id, camera, root_path):
 
 			for idx in np.where(are_changes_sufficient)[0]:
 
-				pose_coord = cur_poses[idx]  # (25, 3)
-				color_coord = cur_color_coords[idx]  # (25, 2)
-				depth_coord = cur_depth_coords[idx]  # (25, 2)
+				pose_coord = cur_poses[idx]
+				color_coord = cur_color_coords[idx]
+				depth_coord = cur_depth_coords[idx]
 				bbox = boxlib.expand(boxlib.bb_of_points(color_coord), 1.25)
 
 				valid = camera.is_visible(pose_coord, [1920, 1080]) & (200.0 <= pose_coord[:, 2])
@@ -101,8 +94,6 @@ def filter_samples(anno_files, cam_id, camera, root_path):
 				if np.count_nonzero(valid) >= 15:
 					samples.append(dict(skeleton = pose_coord, color = color_coord, depth = depth_coord, frame = frame, video = video_id, bbox = bbox))
 					sample_count += 1
-
-		# print('sample_count:', sample_count)
 
 	with open(os.path.join(root_path, 'final_samples', cam_id + '.pkl'), 'wb') as file:
 		pickle.dump(samples, file)
@@ -113,7 +104,7 @@ def main(root_path):
 
 	anno_files = glob.glob(os.path.join(root_path, 'numpy_skeletons', '*.skeleton.npy'))
 
-	anno_files_by_cam = groupby(anno_files, get_cam_id)
+	anno_files_by_cam = utils.groupby(anno_files, get_cam_id)
 
 	pool = multiprocessing.Pool(6)
 

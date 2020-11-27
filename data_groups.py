@@ -5,7 +5,8 @@ import itertools
 import json
 import cv2
 import copy
-import pickle
+import utils
+import pickle5 as pickle
 import numpy as np
 import cameralib
 import transforms3d
@@ -506,7 +507,24 @@ def load_ntu_cameras(args):
 
 	return color_cameras, depth_cameras
 
-def get_ntu_group():
+
+def by_sequence(phase, sample_file):
+
+	partitions = dict(
+		train = ['S001', 'S002', 'S003', 'S004', 'S005', 'S006', 'S007', 'S008', 'S009', 'S010', 'S011'],
+		valid = ['S012', 'S013', 'S014'],
+		test = ['S015', 'S016', 'S017']
+	)
+	cam_id = os.path.basename(sample_file).split('.')[0]
+
+	return cam_id[:4] in partitions[phase]
+
+
+def make_ntu_sample(sample, cameras, image, args):
+	color_cam, depth_cam = cameras
+
+
+def get_ntu_group(phase, args):
 
 	assert os.path.isdir(args.data_down_path)
 
@@ -530,9 +548,41 @@ def get_ntu_group():
 
 	data_info = JointInfo(short_names, _parent, _mirror, mapper[base_joint])
 
+	sample_files = glob.glob(os.path.join(args.data_root_path, 'final_samples', '*.pkl'))
+
+	sample_files = filter(by_sequence, sample_files)
+
 	processes = []
 
 	pool = multiprocessing.Pool(args.num_processes)
+
+	for sample_file in sample_files:
+
+		cam_id = os.path.basename(sample_file).split('.')[0]
+
+		cameras = (color_cameras[cam_id], depth_cameras[cam_id])
+
+		with open(sample_file, 'rb') as file:
+			samples_cur_cam = pickle.load(file)
+
+		samples_by_video = utils.groupby(samples_cur_cam, lambda sample: sample['video_id'])
+
+		for video_id, samples_cur_video in samples_by_video.items():
+
+			samples_by_frame = utils.groupby(samples_cur_video, lambda sample: sample['frame'])
+
+			video_path = os.path.join(args.data_root_path, 'nturgb+d_rgb', video_id + '_rgb.avi')
+
+			for frame, image in utils.prefetch(video_path, 30):
+				if frame in samples_by_frame:
+					for sample in samples_by_frame[frame]:
+						processes.append(pool.apply_async(func = make_ntu_sample, args = (sample, cameras, image, args)))
+
+	pool.close()
+	pool.join()
+	samples = [process.get() for process in processes]
+
+	return data_info, samples
 
 
 def show_skeleton(image, image_coord, confidence, message = '', bbox = None):

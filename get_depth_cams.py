@@ -1,6 +1,7 @@
 import os
 import sys
 import glob
+import utils
 import numpy as np
 import random
 import pickle
@@ -11,13 +12,6 @@ import collections
 np.seterr('raise')
 
 
-def groupby(items, key):
-	result = collections.defaultdict(list)
-	for item in items:
-		result[key(item)].append(item)
-	return result
-
-
 def get_cam_id(anno_file):
 	video_id = os.path.basename(anno_file).split('.')[0]
 	return video_id[:8]
@@ -26,7 +20,7 @@ def get_cam_id(anno_file):
 def main(path):
 	anno_files = glob.glob(os.path.join(path, '*.skeleton.npy'))
 
-	anno_files_by_cam = groupby(anno_files, get_cam_id)
+	anno_files_by_cam = utils.groupby(anno_files, get_cam_id)
 
 	cameras = {cam_id: get_camera(annos, cam_id) for cam_id, annos in anno_files_by_cam.items()}
 

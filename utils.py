@@ -1,8 +1,43 @@
 import os
+import queue
 import torch
+import imageio
+import threading
 import numpy as np
 
 from builtins import zip as xzip
+
+
+def prefetch(video_path, buffer_size):
+
+	q = queue.Queue(buffer_size)
+	end_mark = object()
+
+	def producer():
+		with imageio.get_reader(video_path, 'ffmpeg') as reader:
+			for elem in reader:
+				q.put(elem)
+			q.put(end_mark)
+
+	producer = threading.Thread(target = producer)
+	producer.start()
+
+	try:
+		while True:
+			elem = q.get()
+			if elem is end_mark:
+				return
+			yield elem
+	finally:
+		producer.join()
+
+
+def groupby(items, key):
+	result = collections.defaultdict(list)
+	for item in items:
+		result[key(item)].append(item)
+	return result
+
 
 class PoseSample:
 	
