@@ -3,9 +3,16 @@ import queue
 import torch
 import imageio
 import threading
+import cameralib
 import numpy as np
 
 from builtins import zip as xzip
+
+
+def transfer_bbox(bbox, color_cam, depth_cam):
+	new_tl = cameralib.reproject_points(np.expand_dims(bbox[:2], axis = 0), color_cam, depth_cam)[0]
+	new_br = cameralib.reproject_points(np.expand_dims(bbox[:2] + bbox[2:], axis = 0), color_cam, depth_cam)[0]
+	return np.concatenate(new_tl, new_br - new_tl)
 
 
 def prefetch(video_path, buffer_size):
@@ -41,13 +48,12 @@ def groupby(items, key):
 
 class PoseSample:
 	
-	def __init__(self, image_path, body_pose, valid, bbox, camera, confid):
+	def __init__(self, image_path, body_pose, valid, bbox, camera):
 		self.image_path = image_path
 		self.body_pose = body_pose
 		self.valid = valid
 		self.bbox = bbox
 		self.camera = camera
-		self.confid = confid
 
 
 class JointInfo:

@@ -93,7 +93,6 @@ class Lecture(data.Dataset):
         if np.random.rand() < 0.5:
             camera.horizontal_flip()
             camera_coords = camera.world_to_camera(world_coords)[self.data_info.mirror]
-            sample.confid = sample.confid[self.data_info.mirror]
             sample.valid = sample.valid[self.data_info.mirror]
         else:
             camera_coords = camera.world_to_camera(world_coords)
@@ -123,9 +122,9 @@ class Lecture(data.Dataset):
             image = np.concatenate([image, channel.transpose(2, 0, 1)])
 
         if self.joint_space:
-            return image, camera_coords, image_coords, np.uint8(sample.confid), np.uint8(sample.valid), camera.intrinsics
+            return image, camera_coords, image_coords, np.uint8(sample.valid), camera.intrinsics
         else:
-            return image, camera_coords, np.uint8(sample.confid)
+            return image, camera_coords, np.uint8(sample.valid)
 
     def augment(self, image):
 

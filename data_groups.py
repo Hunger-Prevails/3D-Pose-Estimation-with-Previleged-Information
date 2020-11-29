@@ -74,8 +74,6 @@ def make_sample(paths, annos, args):
 
 	bbox = coord_to_box(image_coord[cond3, :2], args.box_margin, border)
 
-	confid = (args.thresh_confid <= image_coord[:, 2]) if args.out_of_view else valid.copy()
-
 	expand_side = np.sum((bbox[2:] / args.random_zoom) ** 2) ** 0.5
 
 	box_center = bbox[:2] + bbox[2:] / 2
@@ -100,7 +98,7 @@ def make_sample(paths, annos, args):
 
 		cv2.imwrite(new_path, new_image[:, :, ::-1])
 
-	return PoseSample(new_path, body_pose, valid, new_bbox, new_camera, confid)
+	return PoseSample(new_path, body_pose, valid, new_bbox, new_camera)
 
 
 def coord_to_box(valid_coord, box_margin, border):
@@ -386,8 +384,6 @@ def make_h36m_sample(paths, annos, args):
 
 	valid = np.ones(args.num_joints).astype(np.bool)
 
-	confid = valid.copy()
-
 	expand_side = np.sum((bbox[2:] / args.random_zoom) ** 2) ** 0.5
 
 	box_center = bbox[:2] + bbox[2:] / 2
@@ -412,7 +408,7 @@ def make_h36m_sample(paths, annos, args):
 
 		cv2.imwrite(new_path, new_image[:, :, ::-1])
 
-	return PoseSample(new_path, body_pose, valid, new_bbox, new_camera, confid)
+	return PoseSample(new_path, body_pose, valid, new_bbox, new_camera)
 
 
 def get_h36m_group(phase, args):
@@ -521,7 +517,51 @@ def by_sequence(phase, sample_file):
 
 
 def make_ntu_sample(sample, cameras, image, args):
+	'''
+	Args:
+		sample: dict(skeleton = pose_coord, color = color_coord, depth = depth_coord, frame = frame, video = video_id, bbox = bbox)
+		cameras: tuple(color_cam, depth_cam)
+	'''
+
 	color_cam, depth_cam = cameras
+
+	valid = (200.0 <= pose_coord[:, 2])
+
+	box_center = boxlib.center(sample['bbox'])
+
+	depth_bbox = utils.transfer_bbox(sample['bbox'], color_cam, depth_cam)
+
+	sine = np.sin(np.pi / 6)
+	cosine = np.cos(np.pi / 6)
+
+	expand_shape = np.array([[cosine, sine], [sine, cosine]]) @ sample['bbox'][2:, np.newaxis]
+	expand_side = np.max(expand_shape)
+
+	scale_factor = min(args.side_in / np.max(sample['bbox'][2:]) / args.random_zoom, 1.0)
+
+	dest_side = int(np.round(expand_side * scale_factor))
+
+	new_cam = copy.deepcopy(color_cam)
+	new_cam.shift_to_center(box_center, (expand_side, expand_side))
+	new_cam.scale_output(scale_factor)
+
+	new_bbox = cameralib.reproject_points(sample['bbox'][None, :2], color_cam, new_cam)[0]
+
+	new_bbox = np.concatenate((new_bbox, sample['bbox'][2:] * scale_factor))
+
+	new_path = os.path.join(args.down_path, video_id, str(frame) + '.jpg')
+
+	if not os.path.exists(new_path):
+
+		new_image = cameralib.reproject_image(image, color_cam, new_cam, (dest_side, dest_side))
+
+		cv2.imwrite(new_path, new_image[:, :, ::-1])
+
+	keys = (color, depth)
+	bboxes = (new_bbox, depth_bbox)
+	cameras = (new_cam, depth_cam)
+
+	return PoseSample(new_path, sample['pose_coord'], valid, dict(zip(keys, bboxes)), dict(zip(keys, cameras)))
 
 
 def get_ntu_group(phase, args):

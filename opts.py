@@ -10,7 +10,6 @@ parser.add_argument('-test_only', action='store_true', help='only performs test'
 parser.add_argument('-val_only', action='store_true', help='only performs validation')
 parser.add_argument('-pretrain', action='store_true', help='whether to load an imagenet pre-train')
 parser.add_argument('-resume', action='store_true', help='whether to continue from a previous checkpoint')
-parser.add_argument('-out_of_view', action='store_true', help='whether to train cam regressor on out-of-view keypoints')
 parser.add_argument('-extra_channel', action='store_true', help='whether to append an extra channel that masks the bbox')
 parser.add_argument('-confid_filter', action='store_true', help='whether to threshold uncertain keypoints off')
 parser.add_argument('-static_filter', action='store_true', help='whether to threshold static frames off')

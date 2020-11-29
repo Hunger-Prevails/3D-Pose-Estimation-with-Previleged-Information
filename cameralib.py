@@ -351,7 +351,7 @@ def camera_in_new_world(camera, new_world_camera):
     return Camera(t, R, camera.intrinsic_matrix, camera.distortion_coeffs, new_world_up)
 
 
-def reproject_image_points(points, old_camera, new_camera):
+def reproject_points(points, old_camera, new_camera):
     """Transforms keypoints of an image captured with `old_camera` to the corresponding
     keypoints of an image captured with `new_camera`.
     The world position (optical center) of the cameras must be the same, otherwise
@@ -359,7 +359,7 @@ def reproject_image_points(points, old_camera, new_camera):
 
     if (old_camera.distortion_coeffs is None and new_camera.distortion_coeffs is None and
             points.ndim == 2):
-        return reproject_image_points_fast(points, old_camera, new_camera)
+        return reproject_points_fast(points, old_camera, new_camera)
 
     if not np.allclose(old_camera.t, new_camera.t):
         raise Exception(
@@ -456,7 +456,7 @@ def get_affine(src_camera, dst_camera):
             'direction may not change in the affine case!')
 
     src_points = np.array([[0, 0], [1, 0], [0, 1]], np.float32)
-    dst_points = reproject_image_points(src_points, src_camera, dst_camera)
+    dst_points = reproject_points(src_points, src_camera, dst_camera)
     return np.append(cv2.getAffineTransform(src_points, dst_points), [[0, 0, 1]], axis=0)
 
 
@@ -466,7 +466,7 @@ def undistort_points(cam, points):
 
     cam_undistorted = cam.copy()
     cam_undistorted.undistort()
-    points_undistorted = reproject_image_points(points, cam, cam_undistorted)
+    points_undistorted = reproject_points(points, cam, cam_undistorted)
     return cam_undistorted, points_undistorted
 
 
@@ -572,7 +572,7 @@ def look_at_box(orig_cam, box, output_side):
     cam.turn_towards(target_image_point=center_point)
     cam.undistort()
     cam.square_pixels()
-    cam_sidepoints = reproject_image_points(sidepoints, orig_cam, cam)
+    cam_sidepoints = reproject_points(sidepoints, orig_cam, cam)
     if box[2] < box[3]:
         crop_side = np.abs(cam_sidepoints[0, 1] - cam_sidepoints[1, 1])
     else:
@@ -725,7 +725,7 @@ def is_all_visible_in_new_camera(image, old_camera, new_camera, output_imshape):
                           np.logical_and(np.all(0 <= y), np.all(y < image.shape[0])))
 
 
-def reproject_image_points_fast(points, old_camera, new_camera):
+def reproject_points_fast(points, old_camera, new_camera):
     old_matrix = old_camera.intrinsic_matrix @ old_camera.R
     new_matrix = new_camera.intrinsic_matrix @ new_camera.R
     homography = (new_matrix @ np.linalg.inv(old_matrix)).astype(np.float32)
