@@ -2,10 +2,12 @@ import os
 import h5py
 import jpeg4py
 import itertools
+import boxlib
 import json
 import cv2
 import copy
 import utils
+import glob
 import pickle5 as pickle
 import numpy as np
 import cameralib
@@ -243,13 +245,13 @@ def get_cmu_group(phase, args):
 
 		prev_pose = dict()
 
-		for frame_idx, frame in enumerate(xrange(start_frame, end_frame, interval)):
+		for frame_idx, frame in enumerate(range(start_frame, end_frame, interval)):
 
 			bodies = os.path.join(root_skeleton, 'body3DScene_' + str(frame).zfill(8) + '.json')
 			bodies = json.load(open(bodies))['bodies']
 
 			if not bodies:
-				print 'empty frame skipped'
+				print('empty frame skipped')
 				continue
 
 			for body_pose in bodies:
@@ -267,7 +269,7 @@ def get_cmu_group(phase, args):
 					displacement = np.linalg.norm(prev_pose[body_id] - body_pose, axis = 1)
 
 					if np.all(displacement < args.thresh_static):
-						print 'static pose skipped', body_id
+						print('static pose skipped', body_id)
 						pose_idx += 1
 						continue
 
@@ -294,7 +296,7 @@ def get_cmu_group(phase, args):
 
 				pose_idx += 1
 
-			print 'collecting samples [', str(frame_idx) + '/' + str((end_frame - start_frame) / interval), '] sequence', sequence
+			print('collecting samples [', str(frame_idx) + '/' + str((end_frame - start_frame) / interval), '] sequence', sequence)
 
 	pool.close()
 	pool.join()
@@ -326,7 +328,7 @@ def collect_data(root_part, activity, camera_id, stride):
 
 	root_image = os.path.join(root_part, 'Images', activity + '.' + cam_names[camera_id])
 
-	image_paths = ['frame_' + str(x).zfill(6) + '.jpg' for x in xrange(0, n_frames, stride)]
+	image_paths = ['frame_' + str(x).zfill(6) + '.jpg' for x in range(0, n_frames, stride)]
 	image_paths = [os.path.join(root_image, path) for path in image_paths]
 
 	path_bbox = os.path.join(root_part, 'BBoxes', activity + '.' + cam_names[camera_id] + '.npy')
@@ -364,8 +366,8 @@ def get_h36m_cameras(metadata):
 
 	return [
 		[
-			make_h36m_camera(extrinsic[camera_id, partition], intrinsic[camera_id]) for partition in xrange(11)
-		] for camera_id in xrange(4)
+			make_h36m_camera(extrinsic[camera_id, partition], intrinsic[camera_id]) for partition in range(11)
+		] for camera_id in range(4)
 	]
 
 
@@ -467,7 +469,7 @@ def get_h36m_group(phase, args):
 
 			camera = cameras[camera_id][partition - 1]
 
-			print 'collecting samples', str(index) + '/' + str(len(activities) * 4), 'partition', partition
+			print('collecting samples', str(index) + '/' + str(len(activities) * 4), 'partition', partition)
 
 			image_paths, body_poses, bboxes = collect_data(root_part, activity, camera_id, stride[phase])
 
@@ -522,10 +524,7 @@ def make_ntu_sample(sample, cameras, image, args):
 		sample: dict(skeleton = pose_coord, color = color_coord, depth = depth_coord, frame = frame, video = video_id, bbox = bbox)
 		cameras: tuple(color_cam, depth_cam)
 	'''
-
 	color_cam, depth_cam = cameras
-
-	valid = (200.0 <= pose_coord[:, 2])
 
 	box_center = boxlib.center(sample['bbox'])
 
@@ -547,9 +546,9 @@ def make_ntu_sample(sample, cameras, image, args):
 
 	new_bbox = cameralib.reproject_points(sample['bbox'][None, :2], color_cam, new_cam)[0]
 
-	new_bbox = np.concatenate((new_bbox, sample['bbox'][2:] * scale_factor))
+	new_bbox = np.concatenate([new_bbox, sample['bbox'][2:] * scale_factor])
 
-	new_path = os.path.join(args.down_path, video_id, str(frame) + '.jpg')
+	new_path = os.path.join(args.down_path, str(sample['frame']) + '.jpg')
 
 	if not os.path.exists(new_path):
 
@@ -557,11 +556,12 @@ def make_ntu_sample(sample, cameras, image, args):
 
 		cv2.imwrite(new_path, new_image[:, :, ::-1])
 
-	keys = (color, depth)
-	bboxes = (new_bbox, depth_bbox)
-	cameras = (new_cam, depth_cam)
+	sample['image'] = new_path
+	sample['bbox'] = new_bbox
+	sample['new_cam'] = new_cam
+	sample['depth_bbox'] = depth_bbox
 
-	return PoseSample(new_path, sample['pose_coord'], valid, dict(zip(keys, bboxes)), dict(zip(keys, cameras)))
+	return sample
 
 
 def get_ntu_group(phase, args):
@@ -570,6 +570,56 @@ def get_ntu_group(phase, args):
 
 	color_cameras, depth_cameras = load_ntu_cameras(args)
 
+	sample_files = glob.glob(os.path.join(args.data_root_path, 'midway_samples', '*.pkl'))
+
+	sample_files = [file for file in sample_files if by_sequence(phase, file)]
+
+	for i_cam, sample_file in enumerate(sample_files):
+
+		processes = []
+
+		pool = multiprocessing.Pool(args.num_processes)
+
+		cam_id = os.path.basename(sample_file).split('.')[0]
+
+		print('=> handles camera[', cam_id, ']: [', i_cam, '|', len(sample_files), ']')
+
+		cameras = (color_cameras[cam_id], depth_cameras[cam_id])
+
+		with open(sample_file, 'rb') as file:
+			samples_cur_cam = pickle.load(file)
+
+		samples_by_video = utils.groupby(samples_cur_cam, lambda sample: sample['video'])
+
+		for i_vid, (video_id, samples_cur_video) in enumerate(samples_by_video.items()):
+
+			print('\t => handles video[', video_id, ']: [', i_vid, '|', len(samples_by_video), ']')
+
+			samples_by_frame = utils.groupby(samples_cur_video, lambda sample: sample['frame'])
+
+			video_path = os.path.join(args.data_root_path, 'nturgb+d_rgb', video_id + '_rgb.avi')
+
+			down_path = os.path.join(args.data_down_path, video_id)
+
+			if not os.path.exists(down_path):
+				os.mkdir(down_path)
+
+			args.down_path = down_path
+
+			for frame, image in enumerate(utils.prefetch(video_path, 10)):
+				if frame in samples_by_frame:
+					for sample in samples_by_frame[frame]:
+						processes.append(pool.apply_async(func = make_ntu_sample, args = (sample, cameras, image, args)))
+
+		pool.close()
+		pool.join()
+		samples = [process.get() for process in processes]
+
+		with open(sample_file.replace('midway', 'final'), 'wb') as file:
+			pickle.dump(samples, file)
+
+
+def get_ntu_info():
 	from joint_settings import h36m_short_names as short_names
 	from joint_settings import h36m_parent as parent
 	from joint_settings import h36m_mirror as mirror
@@ -588,41 +638,7 @@ def get_ntu_group(phase, args):
 
 	data_info = JointInfo(short_names, _parent, _mirror, mapper[base_joint])
 
-	sample_files = glob.glob(os.path.join(args.data_root_path, 'final_samples', '*.pkl'))
-
-	sample_files = filter(by_sequence, sample_files)
-
-	processes = []
-
-	pool = multiprocessing.Pool(args.num_processes)
-
-	for sample_file in sample_files:
-
-		cam_id = os.path.basename(sample_file).split('.')[0]
-
-		cameras = (color_cameras[cam_id], depth_cameras[cam_id])
-
-		with open(sample_file, 'rb') as file:
-			samples_cur_cam = pickle.load(file)
-
-		samples_by_video = utils.groupby(samples_cur_cam, lambda sample: sample['video_id'])
-
-		for video_id, samples_cur_video in samples_by_video.items():
-
-			samples_by_frame = utils.groupby(samples_cur_video, lambda sample: sample['frame'])
-
-			video_path = os.path.join(args.data_root_path, 'nturgb+d_rgb', video_id + '_rgb.avi')
-
-			for frame, image in utils.prefetch(video_path, 30):
-				if frame in samples_by_frame:
-					for sample in samples_by_frame[frame]:
-						processes.append(pool.apply_async(func = make_ntu_sample, args = (sample, cameras, image, args)))
-
-	pool.close()
-	pool.join()
-	samples = [process.get() for process in processes]
-
-	return data_info, samples
+	return data_info
 
 
 def show_skeleton(image, image_coord, confidence, message = '', bbox = None):

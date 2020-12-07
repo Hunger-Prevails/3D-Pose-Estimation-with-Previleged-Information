@@ -220,3 +220,53 @@ h36m_mirror = dict(
 h36m_cam_names = ['54138969', '55011271', '58860488', '60457274']
 h36m_key_foots = [1, 2, 3, 6, 7, 8, 12, 13, 14, 15, 17, 18, 19, 25, 26, 27, 0]
 h36m_base_joint = 'pelv'
+
+ntu_short_names = [
+	'Pelvis',
+	'Spine',
+	'Neck',
+	'Head',
+	'rShoulder',
+	'rElbow',
+	'rWrist',
+	'rHand',
+	'lShoulder',
+	'lElbow',
+	'lWrist',
+	'lHand',
+	'rHip',
+	'rKnee',
+	'rAnkle',
+	'rFoot',
+	'lHip',
+	'lKnee',
+	'lAnkle',
+	'lFoot',
+	'Clavicle'
+]
+
+ntu_parent = dict(
+	[
+		('Pelvis', 'Pelvis'),
+		('Spine', 'Pelvis'),
+		('Neck', 'Clavicle'),
+		('Head', 'Neck'),
+		('rShoulder', 'Clavicle'),
+		('rElbow', 'rShoulder'),
+		('rWrist', 'rElbow'),
+		('rHand', 'rWrist'),
+		('lShoulder', 'Clavicle'),
+		('lElbow', 'lShoulder'),
+		('lWrist', 'lElbow'),
+		('lHand', 'lWrist'),
+		('rHip', 'Pelvis'),
+		('rKnee', 'rHip'),
+		('rAnkle', 'rKnee'),
+		('rFoot', 'rAnkle'),
+		('lHip', 'Pelvis'),
+		('lKnee', 'lHip'),
+		('lAnkle', 'lKnee'),
+		('lFoot', 'lAnkle'),
+		('Clavicle', 'Spine')
+	]
+)
