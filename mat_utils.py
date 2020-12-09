@@ -135,6 +135,6 @@ def rand_rotate(center, image, points, max_radian):
 
 	dest = cv2.warpAffine(image, matrix, image.shape[:2][::-1])
 
-	trans = np.matmul(np.hstack([points, np.ones((points.shape[0], 1))]), matrix.T)
+	trans = np.hstack([points, np.ones((points.shape[0], 1))]) @ matrix.T
 
 	return dest, trans

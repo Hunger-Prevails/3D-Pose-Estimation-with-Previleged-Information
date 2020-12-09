@@ -34,7 +34,7 @@ def get_cameras(json_file, cam_names):
 				(
 					cam['name'],
 					cameralib.Camera(
-							np.matmul(np.array(cam['R']).T, - np.array(cam['t'])),
+							- np.array(cam['R']).T @ np.array(cam['t']),
 							np.array(cam['R']),
 							np.array(cam['K']),
 							np.array(cam['distCoef']),
@@ -63,7 +63,7 @@ def make_sample(paths, annos, args):
 
 	cond3 = cond1 & cond2 & (image_coord[:, 2] != -1)
 
-	valid = (args.thresh_confid <= image_coord[:, 2]) & cond3 if args.confid_filter else cond3
+	valid = (args.thresh_confid <= image_coord[:, 2]) & cond3
 
 	if np.sum(valid) < args.num_valid:
 		return None
@@ -495,17 +495,6 @@ def get_h36m_group(phase, args):
 	return data_info, samples
 
 
-def load_ntu_cameras(args):
-
-	with open(os.path.join(args.data_root_path, 'cameras.pkl'), 'rb') as file:
-		color_cameras = pickle.load(file)
-
-	with open(os.path.join(args.data_root_path, 'depth_cameras.pkl'), 'rb') as file:
-		depth_cameras = pickle.load(file)
-
-	return color_cameras, depth_cameras
-
-
 def by_sequence(phase, sample_file):
 
 	partitions = dict(
@@ -568,7 +557,11 @@ def get_ntu_group(phase, args):
 
 	assert os.path.isdir(args.data_down_path)
 
-	color_cameras, depth_cameras = load_ntu_cameras(args)
+	with open(os.path.join(args.data_root_path, 'cameras.pkl'), 'rb') as file:
+		color_cameras = pickle.load(file)
+
+	with open(os.path.join(args.data_root_path, 'depth_cameras.pkl'), 'rb') as file:
+		depth_cameras = pickle.load(file)
 
 	sample_files = glob.glob(os.path.join(args.data_root_path, 'midway_samples', '*.pkl'))
 

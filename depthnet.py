@@ -135,7 +135,7 @@ class ResNet(nn.Module):
 
         side_out = (args.side_in - 1) / args.stride + 1
 
-        self.conv1 = nn.Conv2d(4 if args.extra_channel else 3, 64, kernel_size = 7, stride = 2, padding = 3, bias = False)
+        self.conv1 = nn.Conv2d(1 if args.depth_only else 3, 64, kernel_size = 7, stride = 2, padding = 3, bias = False)
         self.bn1 = nn.BatchNorm2d(64)
         self.maxpool = nn.MaxPool2d(kernel_size = 3, stride = 2, padding = 1)
 
@@ -153,19 +153,12 @@ class ResNet(nn.Module):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
 
-        self.cam_regressor = nn.Conv2d(
+        self.regressor = nn.Conv2d(
             in_channels = 512 * block.expansion,
             out_channels = args.depth * args.num_joints,
             kernel_size = 3,
             padding = 1
         )
-
-        self.mat_regressor = nn.Conv2d(
-            in_channels = 512 * block.expansion,
-            out_channels = args.num_joints,
-            kernel_size = 3,
-            padding = 1
-        ) if args.joint_space else None
 
     def _make_layer(self, block, planes, blocks, stride = 1, dilation = 1):
         downsample = None
@@ -200,10 +193,7 @@ class ResNet(nn.Module):
         x = self.layer3(x)
         x = self.layer4(x)
 
-        if self.mat_regressor:
-            return self.cam_regressor(x), self.mat_regressor(x)
-        else:
-            return self.cam_regressor(x)
+        return self.regressor(x)
 
 
 def resnet18(args):
@@ -214,10 +204,9 @@ def resnet18(args):
         
         keys = list(toy_dict.keys())
 
-        if args.extra_channel:
-            tensor = model_dict['conv1.weight'].data
-            tensor[:, :3] = toy_dict['conv1.weight'].data
-            toy_dict['conv1.weight'].data = tensor
+        if args.depth_only:
+            tensor = toy_dict['conv1.weight'].data
+            toy_dict['conv1.weight'].data = torch.clone(tensor[:, :1])
 
         for key in keys:
             if key not in model_dict:
@@ -240,10 +229,9 @@ def resnet50(args):
         
         keys = list(toy_dict.keys())
 
-        if args.extra_channel:
-            tensor = model_dict['conv1.weight']
-            tensor[:, :3] = toy_dict['conv1.weight'].data
-            toy_dict['conv1.weight'].data = tensor
+        if args.depth_only:
+            tensor = toy_dict['conv1.weight'].data
+            toy_dict['conv1.weight'].data = torch.clone(tensor[:, :1])
 
         for key in keys:
             if key not in model_dict:

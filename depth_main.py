@@ -2,37 +2,24 @@ import os
 import torch
 import torch.nn as nn
 import torch.backends.cudnn as cudnn
+import importlib
 
 from opts import args
-from datasets import get_data_loader
-from comp_datasets import get_comp_loader
+from depth_datasets import get_data_loader
 from log import Logger
-from train import Trainer
-
-from resnet import resnet18
-from resnet import resnet50
-
-
-def get_catalogue():
-    model_creators = dict()
-
-    model_creators['resnet18'] = resnet18
-    model_creators['resnet50'] = resnet50
-
-    return model_creators
+from depth_train import Trainer
 
 
 def create_model(args):
-
     assert not (args.resume and args.pretrain)
+    assert not (args.do_fusion and args.depth_only)
 
-    state = None
+    model_creator = 'fusion' if args.do_fusion else 'depth'
+    model_creator = importlib.import_module(model_creator + 'net')
 
-    model_creators = get_catalogue()
-
-    assert args.model in model_creators
-
-    model = model_creators[args.model](args)
+    assert hasattr(model_creator, args.model)
+    model = getattr(model_creator, args.model)(args)
+    state = None;
 
     if args.test_only or args.val_only:
         save_path = os.path.join(args.save_path, args.model + '-' + args.suffix)
@@ -46,13 +33,10 @@ def create_model(args):
         checkpoint = os.path.join(save_path, 'model_%d.pth' % best)
         checkpoint = torch.load(checkpoint)['model']
 
-        keys = checkpoint.keys()
-        model_dict = model.state_dict()
+        toy_keys = set(checkpoint.keys())
+        model_keys = set(model.state_dict().keys())
 
-        for key in keys:
-            if key not in model_dict:
-                print key
-                del checkpoint[key]
+        assert(model_keys.difference(toy_keys).empty())
         
         model.load_state_dict(checkpoint)
 
@@ -71,8 +55,6 @@ def create_model(args):
 
 
 def main():
-    assert args.do_track <= args.joint_space
-
     model, state = create_model(args)
     print('=> Model and criterion are ready')
 
@@ -84,8 +66,6 @@ def main():
         test_loader, data_info = get_data_loader(args, 'valid')
 
         data_loader, data_info = get_data_loader(args, 'train')
-
-        comp_loader = get_comp_loader(args, 'train', data_info) if args.do_company else None
 
     print('=> Dataloaders are ready')
 

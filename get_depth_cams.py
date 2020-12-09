@@ -42,9 +42,6 @@ def get_camera(anno_files, cam_id):
 	discard_rows = []
 
 	for chosen_file in chosen_files:
-
-		# print('gather equations from file:', chosen_file)
-
 		anno = np.load(chosen_file, allow_pickle = True, encoding = 'latin1').item()
 
 		n_frames = len(anno['nbodys'])

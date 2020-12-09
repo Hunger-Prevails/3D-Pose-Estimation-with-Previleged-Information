@@ -119,6 +119,19 @@ class Bottleneck(nn.Module):
         return F.relu(out + residual)
 
 
+class Fusion(nn.Module):
+
+    def __init__(self, inplanes):
+        super(Fusion, self).__init__()
+
+        self.conv = nn.Conv2d(inplanes * 2, inplanes, kernel_size = 1, bias = False)
+        self.bn = nn.BatchNorm2d(inplanes)
+
+    def forward(self, x, y):
+        x = self.conv(torch.cat([x, y], dim = 1))
+        return F.relu(self.bn(x))
+
+
 class ResNet(nn.Module):
 
     def __init__(self, block, layers, args):
@@ -127,22 +140,32 @@ class ResNet(nn.Module):
 
         super(ResNet, self).__init__()
 
-        self.inplanes = 64
-        
         stride2 = int(np.minimum(np.maximum(np.log2(args.stride), 2), 3) - 1)
         stride3 = int(np.minimum(np.maximum(np.log2(args.stride), 3), 4) - 2)
         stride4 = int(np.minimum(np.maximum(np.log2(args.stride), 4), 5) - 3)
 
         side_out = (args.side_in - 1) / args.stride + 1
 
-        self.conv1 = nn.Conv2d(4 if args.extra_channel else 3, 64, kernel_size = 7, stride = 2, padding = 3, bias = False)
+        self.conv1 = nn.Conv2d(3, 64, kernel_size = 7, stride = 2, padding = 3, bias = False)
+        self.conv2 = nn.Conv2d(1, 64, kernel_size = 7, stride = 2, padding = 3, bias = False)
+        
         self.bn1 = nn.BatchNorm2d(64)
+        self.bn2 = nn.BatchNorm2d(64)
+
         self.maxpool = nn.MaxPool2d(kernel_size = 3, stride = 2, padding = 1)
 
+        self.inplanes = 64
         self.layer1 = self._make_layer(block, 64, layers[0])
         self.layer2 = self._make_layer(block, 128, layers[1], stride = stride2, dilation = 3 - stride2)
+
+        self.fusion = Fusion(self.inplanes)
+
         self.layer3 = self._make_layer(block, 256, layers[2], stride = stride3, dilation = 3 - stride3)
         self.layer4 = self._make_layer(block, 512, layers[3], stride = stride4, dilation = 3 - stride4)
+
+        self.inplanes = 64
+        self.layer5 = self._make_layer(block, 64, layers[0])
+        self.layer6 = self._make_layer(block, 128, layers[1], stride = stride2, dilation = 3 - stride2)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -153,19 +176,12 @@ class ResNet(nn.Module):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
 
-        self.cam_regressor = nn.Conv2d(
+        self.regressor = nn.Conv2d(
             in_channels = 512 * block.expansion,
             out_channels = args.depth * args.num_joints,
             kernel_size = 3,
             padding = 1
         )
-
-        self.mat_regressor = nn.Conv2d(
-            in_channels = 512 * block.expansion,
-            out_channels = args.num_joints,
-            kernel_size = 3,
-            padding = 1
-        ) if args.joint_space else None
 
     def _make_layer(self, block, planes, blocks, stride = 1, dilation = 1):
         downsample = None
@@ -189,21 +205,25 @@ class ResNet(nn.Module):
 
         return nn.Sequential(*layers)
 
-    def forward(self, x):
+    def forward(self, x, y):
         x = self.conv1(x)
+        y = self.conv2(y)
         x = self.bn1(x)
-        x = F.relu(x)
-        x = self.maxpool(x)
+        y = self.bn2(y)
+        x = self.maxpool(F.relu(x))
+        y = self.maxpool(F.relu(y))
 
         x = self.layer1(x)
+        y = self.layer5(y)
         x = self.layer2(x)
+        y = self.layer6(y)
+
+        x = self.fusion(x, y)
+
         x = self.layer3(x)
         x = self.layer4(x)
 
-        if self.mat_regressor:
-            return self.cam_regressor(x), self.mat_regressor(x)
-        else:
-            return self.cam_regressor(x)
+        return self.regressor(x)
 
 
 def resnet18(args):
@@ -212,18 +232,41 @@ def resnet18(args):
         toy_dict = torch.load(args.model_path)
         model_dict = model.state_dict()
         
-        keys = list(toy_dict.keys())
+        manual_update = set()
 
-        if args.extra_channel:
-            tensor = model_dict['conv1.weight'].data
-            tensor[:, :3] = toy_dict['conv1.weight'].data
-            toy_dict['conv1.weight'].data = tensor
+        for key in model_dict.keys():
+            if key.startswith('bn2'):
+                if key.replace('bn2', 'bn1') in toy_dict:
+                    model_dict[key].data = torch.clone(toy_dict[key.replace('bn2', 'bn1')].data)
+                    manual_update.add(key)
+            if key.startswith('layer5'):
+                if key.replace('layer5', 'layer1') in toy_dict:
+                    model_dict[key].data = torch.clone(toy_dict[key.replace('layer5', 'layer1')].data)
+                    manual_update.add(key)
+            if key.startswith('layer6'):
+                if key.replace('layer6', 'layer2') in toy_dict:
+                    model_dict[key].data = torch.clone(toy_dict[key.replace('layer6', 'layer2')].data)
+                    manual_update.add(key)
 
-        for key in keys:
+        model_dict['conv2.weight'].data = torch.clone(toy_dict['conv1.weight'].data[:, :1])
+        manual_update.add('conv2.weight')
+
+        model_keys = set(model_dict.keys())
+        toy_keys = set(toy_dict.keys())
+
+        untended = model_keys.difference(toy_keys).difference(manual_update)
+        untended = [key for key in untended if not key.endswith('num_batches_tracked')]
+
+        from_fusion = [key.startswith('fusion') for key in untended]
+        from_regressor = [key.startswith('regressor') for key in untended]
+
+        assert np.all(np.logical_or(from_fusion, from_regressor))
+
+        for key in toy_keys:
             if key not in model_dict:
-                print('key [', key, '] deleted')
+                print('toy key [', key, '] discarded')
                 del toy_dict[key]
-
+        
         model_dict.update(toy_dict)
         model.load_state_dict(model_dict)
 
@@ -238,16 +281,36 @@ def resnet50(args):
         toy_dict = torch.load(args.model_path)
         model_dict = model.state_dict()
         
-        keys = list(toy_dict.keys())
+        manual_update = set()
 
-        if args.extra_channel:
-            tensor = model_dict['conv1.weight']
-            tensor[:, :3] = toy_dict['conv1.weight'].data
-            toy_dict['conv1.weight'].data = tensor
+        for key in model_dict.keys():
+            if key.startswith('bn2') and key.replace('bn2', 'bn1') in toy_dict:
+                model_dict[key].data = torch.clone(toy_dict[key.replace('bn2', 'bn1')].data)
+                manual_update.add(key)
+            if key.startswith('layer5') and key.replace('layer5', 'layer1') in toy_dict:
+                model_dict[key].data = torch.clone(toy_dict[key.replace('layer5', 'layer1')].data)
+                manual_update.add(key)
+            if key.startswith('layer6') and key.replace('layer6', 'layer2') in toy_dict:
+                model_dict[key].data = torch.clone(toy_dict[key.replace('layer6', 'layer2')].data)
+                manual_update.add(key)
 
-        for key in keys:
+        model_dict['conv2.weight'].data = torch.clone(toy_dict['conv1.weight'].data[:, :1])
+        manual_update.add('conv2.weight')
+
+        model_keys = set(model_dict.keys())
+        toy_keys = set(toy_dict.keys())
+
+        untended = model_keys.difference(toy_keys).difference(manual_update)
+        untended = [key for key in untended if not key.endswith('num_batches_tracked')]
+
+        from_fusion = [key.startswith('fusion') for key in untended]
+        from_regressor = [key.startswith('regressor') for key in untended]
+
+        assert np.all(np.logical_or(from_fusion, from_regressor))
+
+        for key in toy_keys:
             if key not in model_dict:
-                print('key [', key, '] deleted')
+                print('toy key [', key, '] discarded')
                 del toy_dict[key]
         
         model_dict.update(toy_dict)

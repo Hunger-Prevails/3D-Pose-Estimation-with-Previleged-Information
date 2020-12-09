@@ -46,7 +46,7 @@ class Lecture(data.Dataset):
         self.eraser = args.eraser
 
         self.occluder = args.occluder
-        self.occ_path = args.occluder_path
+        self.occ_path = args.occ_path
         self.occ_count = torch.load(os.path.join(self.occ_path, 'count.pth'))['count']
 
         self.mean = [0.485, 0.456, 0.406]
@@ -215,7 +215,7 @@ class Exam(data.Dataset):
 
             image = np.concatenate([image, channel.transpose(2, 0, 1)])
 
-        back_rotation = np.matmul(sample.camera.R, camera.R.T)
+        back_rotation = sample.camera.R @ camera.R.T
 
         if self.joint_space:
             return image, camera_coords, image_coords, back_rotation, np.uint8(sample.valid), camera.intrinsics

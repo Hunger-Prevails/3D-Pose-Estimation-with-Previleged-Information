@@ -83,7 +83,7 @@ class Logger:
 
             torch.save(self.train_record, os.path.join(self.save_path, 'train_record.pth'))
 
-            print '- train record saved to', os.path.join(self.save_path, 'train_record.pth'), '\n'
+            print('- train record saved to', os.path.join(self.save_path, 'train_record.pth'), '\n')
 
 
     def final_print(self):
@@ -95,4 +95,4 @@ class Logger:
         if self.do_track:
             message += '  recon_auc: %6.3f' % (self.state['best_recon_auc'])
 
-        print message
+        print(message)

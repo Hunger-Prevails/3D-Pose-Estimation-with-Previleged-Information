@@ -11,12 +11,10 @@ python main.py \
 				-shuffle \
 				-save_record \
 				-pretrain \
-				-confid_filter \
-				-static_filter \
 				-joint_space \
 				-do_track \
 				-model resnet50 \
-				-model_path /home/liu/pose_track/models/resnet50.pth \
+				-model_path /home/liu/camera_pose/models/resnet50.pth \
 				-suffix do_atn_h36m_mpii \
 				-data_name h36m \
 				-comp_name mpii \
@@ -24,7 +22,6 @@ python main.py \
 				-comp_root_path /globalwork/data/mpii \
 				-data_down_path /globalwork/liu/h36m_down \
 				-comp_down_path /globalwork/liu/mpii_down \
-				-occluder_path /globalwork/liu/pascal_occluders \
 				-save_path /globalwork/liu/pose_track \
 				-criterion SmoothL1 \
 				-batch_size 32 \

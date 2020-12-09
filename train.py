@@ -202,7 +202,7 @@ class Trainer:
 
                     if torch.any(torch.isinf(h_param.grad)):
                         do_update = False
-                        print 'update step skipped'
+                        print('update step skipped')
                         break
 
                     c_param.grad.copy_(h_param.grad)
@@ -233,7 +233,7 @@ class Trainer:
             if do_track:
                 message += '  Recon Loss: %1.4f' % (recon_loss.item())
 
-            print message
+            print(message)
 
         cam_loss_avg /= total
         mat_loss_avg /= total
@@ -245,7 +245,7 @@ class Trainer:
         if do_track:
             message += '  Recon Loss: %1.4f' % (recon_loss_avg)
 
-        print '\n' + message + '\n'
+        print('\n' + message + '\n')
 
         return dict(cam_train_loss = cam_loss_avg, mat_train_loss = mat_loss_avg, comp_train_loss = comp_loss_avg, recon_train_loss = recon_loss_avg)
 
@@ -327,7 +327,7 @@ class Trainer:
             if do_track:
                 message += '  Recon Loss: %1.4f' % (recon_loss.item())
 
-            print message
+            print(message)
 
         cam_loss_avg /= total
         mat_loss_avg /= total
@@ -338,7 +338,7 @@ class Trainer:
         if do_track:
             message += '  Recon Loss: %1.4f' % (recon_loss_avg)
 
-        print '\n' + message + '\n'
+        print('\n' + message + '\n')
 
         return dict(cam_train_loss = cam_loss_avg, mat_train_loss = mat_loss_avg, recon_train_loss = recon_loss_avg)
 
@@ -386,12 +386,11 @@ class Trainer:
 
             total += batch
 
-            print "| train Epoch[%d] [%d/%d]  Loss %1.4f" % (epoch, i, n_batches, loss.item())
+            print('| train Epoch[%d] [%d/%d]  Loss %1.4f' % (epoch, i, n_batches, loss.item()))
 
         loss_avg /= total
 
-        print ''
-        print '=> train Epoch[%d]  Cam Loss: %1.4f\n' % (epoch, loss_avg)
+        print('\n=> train Epoch[%d]  Cam Loss: %1.4f\n' % (epoch, loss_avg))
 
         return dict(cam_train_loss = loss_avg)
 
@@ -459,7 +458,7 @@ class Trainer:
 
             total += batch
 
-            print "| test Epoch[%d] [%d/%d]  Cam Loss: %1.4f  Mat Loss: %1.4f" % (epoch, i, n_batches, cam_loss.item(), mat_loss.item())
+            print('| test Epoch[%d] [%d/%d]  Cam Loss: %1.4f  Mat Loss: %1.4f' % (epoch, i, n_batches, cam_loss.item(), mat_loss.item()))
 
             valid_mask = valid_mask.cpu().numpy().astype(np.bool)
 
@@ -493,18 +492,17 @@ class Trainer:
         record.update(mat_utils.parse_epoch(mat_stats))
         record.update(utils.parse_epoch(cam_stats))
 
-        print ''
-        print '=> test Epoch[%d]  Cam Loss: %1.4f  Mat Loss: %1.4f\n' % (epoch, cam_loss_avg, mat_loss_avg)
+        print('\n=> test Epoch[%d]  Cam Loss: %1.4f  Mat Loss: %1.4f\n' % (epoch, cam_loss_avg, mat_loss_avg))
 
-        print '=>mat_mean: %1.3f  [oks]: %1.3f\n' % (record['mat_mean'], record['score_oks'])
+        print('=>mat_mean: %1.3f  [oks]: %1.3f\n' % (record['mat_mean'], record['score_oks']))
 
-        print '=>[SPEC] cam_mean: %1.3f  [pck]: %1.3f  [auc]: %1.3f\n' % (record['cam_mean'], record['score_pck'], record['score_auc'])
+        print('=>[SPEC] cam_mean: %1.3f  [pck]: %1.3f  [auc]: %1.3f\n' % (record['cam_mean'], record['score_pck'], record['score_auc']))
 
         if self.do_track:
 
             track_rec = utils.parse_epoch(det_stats)
 
-            print '=>[DETER] cam_mean: %1.3f  [pck]: %1.3f  [auc]: %1.3f\n' % (track_rec['cam_mean'], track_rec['score_pck'], track_rec['score_auc'])
+            print('=>[DETER] cam_mean: %1.3f  [pck]: %1.3f  [auc]: %1.3f\n' % (track_rec['cam_mean'], track_rec['score_pck'], track_rec['score_auc']))
 
             for key in track_rec:
                 record['recon_' + key] = track_rec[key]
@@ -562,17 +560,16 @@ class Trainer:
 
             cam_stats.append(utils.analyze(spec_cam, true_cam, valid_mask, self.data_info.mirror, self.thresh))
 
-            print "| test Epoch[%d] [%d/%d]  Cam Loss %1.4f" % (epoch, i, n_batches, loss.item())
+            print('| test Epoch[%d] [%d/%d]  Cam Loss %1.4f' % (epoch, i, n_batches, loss.item()))
 
         loss_avg /= total
 
         record = dict(test_loss = loss_avg)
         record.update(utils.parse_epoch(cam_stats))
 
-        print ''
-        print '=> test Epoch[%d]  Cam Loss: %1.4f\n' % (epoch, loss_avg)
+        print('\n=> test Epoch[%d]  Cam Loss: %1.4f\n' % (epoch, loss_avg))
 
-        print '=>[SPEC] cam_mean: %1.3f  [pck]: %1.3f  [auc]: %1.3f\n' % (record['cam_mean'], record['score_pck'], record['score_auc'])
+        print('=>[SPEC] cam_mean: %1.3f  [pck]: %1.3f  [auc]: %1.3f\n' % (record['cam_mean'], record['score_pck'], record['score_auc']))
 
         return record
 
