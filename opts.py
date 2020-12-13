@@ -42,7 +42,7 @@ parser.add_argument('-criterion', required=True, help='Type of objective functio
 parser.add_argument('-n_epochs', default=20, type=int, help='Training epochs')
 parser.add_argument('-batch_size', default=64, type=int, help='Size of mini-batches for each iteration')
 parser.add_argument('-n_cudas', default=2, type=int, help='Number of cuda devices available')
-parser.add_argument('-workers', default=2, type=int, help='Number of subprocesses to to load data')
+parser.add_argument('-workers', default=2, type=int, help='Number of subprocesses to load data')
 parser.add_argument('-num_processes', default=6, type=int, help='Number of subprocesses in the process pool')
 parser.add_argument('-side_in', default=257, type=int, help='side of input image')
 parser.add_argument('-stride', default=16, type=int, help='stride of network for train')
@@ -60,6 +60,8 @@ parser.add_argument('-box_margin', default=0.6, type=float, help='factor for gen
 parser.add_argument('-comp_loss_weight', default=0.5, type=float, help='loss weight for complement train samples')
 parser.add_argument('-depth_range', default=100.0, type=float, help='depth range of prediction')
 parser.add_argument('-random_zoom', default=0.9, type=float, help='scale for random zoom operation')
+parser.add_argument('-beta', default=1.0, type=float, help='beta index for smooth L1 loss function')
+parser.add_argument('-loss_div', default=1.0, type=float, help='divisor applied to both ground-truth and estimation before loss is calculated')
 
 # evaluation options
 parser.add_argument('-thresh_confid', default=0.1, type=float, help='threshold for a confident annotation')

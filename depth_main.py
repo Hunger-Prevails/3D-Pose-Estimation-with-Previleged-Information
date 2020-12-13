@@ -82,8 +82,8 @@ def main():
         start_epoch = logger.state['epoch'] + 1
         print('=> Start training')
         
-        for epoch in xrange(start_epoch, args.n_epochs + 1):
-            train_rec = trainer.train(epoch, data_loader, comp_loader)
+        for epoch in range(start_epoch, args.n_epochs + 1):
+            train_rec = trainer.train(epoch, data_loader)
             test_rec = trainer.test(epoch, test_loader)
 
             logger.record(epoch, train_rec, test_rec, model) 

@@ -138,7 +138,6 @@ mpii_cmu_match = dict(
 		('lWrist', 'lWrist')
 	]
 )
-
 mpii_h36m_match = dict(
 	[
 		('rAnkle', 'rank'),
@@ -177,7 +176,6 @@ h36m_short_names = [
 	'rwri',
 	'pelv'
 ]
-
 h36m_parent = dict(
 	[
 		('htop', 'head'),
@@ -199,7 +197,6 @@ h36m_parent = dict(
 		('pelv', 'pelv')
 	]
 )
-
 h36m_mirror = dict(
 	[
 		('lsho', 'rsho'),
@@ -216,7 +213,6 @@ h36m_mirror = dict(
 		('rank', 'lank')
 	]
 )
-
 h36m_cam_names = ['54138969', '55011271', '58860488', '60457274']
 h36m_key_foots = [1, 2, 3, 6, 7, 8, 12, 13, 14, 15, 17, 18, 19, 25, 26, 27, 0]
 h36m_base_joint = 'pelv'
@@ -244,7 +240,6 @@ ntu_short_names = [
 	'lFoot',
 	'Clavicle'
 ]
-
 ntu_parent = dict(
 	[
 		('Pelvis', 'Pelvis'),
@@ -270,3 +265,24 @@ ntu_parent = dict(
 		('Clavicle', 'Spine')
 	]
 )
+ntu_mirror = dict(
+	[
+		('rShoulder', 'lShoulder'),
+		('rElbow', 'lElbow'),
+		('rWrist', 'lWrist'),
+		('rHand', 'lHand'),
+		('lShoulder', 'rShoulder'),
+		('lElbow', 'rElbow'),
+		('lWrist', 'rWrist'),
+		('lHand', 'rHand'),
+		('rHip', 'lHip'),
+		('rKnee', 'lKnee'),
+		('rAnkle', 'lAnkle'),
+		('rFoot', 'lFoot'),
+		('lHip', 'rHip'),
+		('lKnee', 'rKnee'),
+		('lAnkle', 'rAnkle'),
+		('lFoot', 'rFoot')
+	]
+)
+ntu_base_joint = 'Pelvis'

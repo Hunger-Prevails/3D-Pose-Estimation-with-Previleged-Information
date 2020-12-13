@@ -423,7 +423,7 @@ class Trainer:
         for i, (image, true_cam, true_mat, back_rotation, valid_mask, intrinsics) in enumerate(test_loader):
 
             if self.n_cudas:
-                image = image.to(cuda_device)
+                image = image.half().to(cuda_device) if self.half_acc else image.to(cuda_device)
 
                 true_cam = true_cam.to(cuda_device)
 
@@ -435,6 +435,10 @@ class Trainer:
 
             with torch.no_grad():
                 cam_feat, mat_feat = self.model(image)
+
+                if self.half_acc:
+                    cam_feat = cam_feat.float()
+                    mat_feat = mat_feat.float()
 
                 heat_mat = mat_utils.to_heatmap(mat_feat, self.num_joints, side_out, side_out)
 

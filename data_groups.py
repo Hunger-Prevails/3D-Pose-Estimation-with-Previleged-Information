@@ -613,10 +613,10 @@ def get_ntu_group(phase, args):
 
 
 def get_ntu_info():
-	from joint_settings import h36m_short_names as short_names
-	from joint_settings import h36m_parent as parent
-	from joint_settings import h36m_mirror as mirror
-	from joint_settings import h36m_base_joint as base_joint
+	from joint_settings import ntu_short_names as short_names
+	from joint_settings import ntu_parent as parent
+	from joint_settings import ntu_mirror as mirror
+	from joint_settings import ntu_base_joint as base_joint
 
 	mapper = dict(zip(short_names, range(len(short_names))))
 
