@@ -6,7 +6,7 @@ import numpy as np
 import random
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
-import data_groups
+import depth_groups
 import cameralib
 import torch
 import utils
@@ -16,11 +16,11 @@ import torch.utils.data as data
 
 from torchvision import datasets
 from torchvision import transforms
-from data_groups import by_sequence
+from depth_groups import by_sequence
 
 
 def get_data_loader(args, phase):
-    data_info = getattr(data_groups, 'get_' + args.data_name + '_info')()
+    data_info = getattr(depth_groups, 'get_' + args.data_name + '_info')()
 
     dataset = Dataset(data_info, phase, args)
 
@@ -39,9 +39,6 @@ class Dataset(data.Dataset):
 
         self.data_info = data_info
         self.samples = self.get_samples(args, phase)
-        
-        with open(os.path.join(args.data_root_path, 'cameras.pkl'), 'rb') as file:
-            self.color_cams = pickle.load(file)
 
         with open(os.path.join(args.data_root_path, 'depth_cameras.pkl'), 'rb') as file:
             self.depth_cams = pickle.load(file)
@@ -115,10 +112,7 @@ class Dataset(data.Dataset):
         return image, new_cam
 
     def parse_sample(self, sample):
-        cam_id = sample['video'][:8]
-        
-        color_cam = self.color_cams[cam_id]
-        depth_cam = self.depth_cams[cam_id]
+        depth_cam = self.depth_cams[sample['video'][:8]]
 
         seq_folder = os.path.join('nturgbd_depth_s' + sample['video'][1:4], 'nturgb+d_depth')
 
@@ -128,7 +122,7 @@ class Dataset(data.Dataset):
 
         do_flip = np.random.rand() < 0.5
 
-        color_image, new_color_cam = self.get_input_image(sample['image'], sample['new_cam'], sample['bbox'], do_flip)
+        color_image, new_color_cam = self.get_input_image(sample['image'], sample['camera'], sample['bbox'], do_flip)
         depth_image, new_depth_cam = self.get_input_image(depth_image, depth_cam, sample['depth_bbox'], do_flip)
 
         color_image = self.transform(color_image.copy())
@@ -136,15 +130,14 @@ class Dataset(data.Dataset):
 
         world_coords = sample['skeleton'][:self.num_joints]
         camera_coords = new_color_cam.world_to_camera(world_coords)
-
-        valid = color_cam.is_visible(world_coords, [1920, 1080]) & (200.0 <= world_coords[:, 2])
+        valid = sample['valid'][:self.num_joints]
 
         if do_flip:
             camera_coords = camera_coords[self.data_info.mirror]
             valid = valid[self.data_info.mirror]
 
         if self.at_test:
-            color_br = sample['new_cam'].R @ new_color_cam.R.T
+            color_br = sample['camera'].R @ new_color_cam.R.T
 
             return color_image, depth_image, camera_coords, valid, color_br
         else:
