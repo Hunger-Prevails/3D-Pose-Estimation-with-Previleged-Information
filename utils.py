@@ -6,8 +6,23 @@ import threading
 import cameralib
 import collections
 import numpy as np
+import pyyolo
 
 from builtins import zip as xzip
+
+
+def to_bbox(det):
+    return np.array([det.x, det.y, det.w, det.h])
+
+
+class Detector:
+	def __init__(self):
+		self.detector = pyyolo.YOLO('models/yolov4.cfg', 'models/yolov4.weights', 'models/coco.data')
+
+	def detect(self, image):
+		dets = self.detector.detect(image, True)
+		dets = filter(lambda det: det.name == 'person', dets)
+		return list(map(to_bbox, dets))
 
 
 def transfer_bbox(bbox, color_cam, depth_cam):

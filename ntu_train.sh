@@ -15,7 +15,7 @@ python3 depth_main.py \
 				-data_down_path /globalwork/liu/ntu_down \
 				-save_path /globalwork/liu/ntu_train \
 				-criterion SmoothL1 \
-				-num_joints 21 \
+				-num_joints 17 \
 				-depth_range 1e3 \
 				-loss_div 1e1 \
 				-n_cudas 1

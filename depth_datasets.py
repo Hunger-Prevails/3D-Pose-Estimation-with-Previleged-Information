@@ -45,7 +45,6 @@ class Dataset(data.Dataset):
 
         self.at_test = phase != 'train'
         self.side_in = args.side_in
-        self.num_joints = args.num_joints
 
         assert len(data_info.short_names) == args.num_joints
 
@@ -128,9 +127,9 @@ class Dataset(data.Dataset):
         color_image = self.transform(color_image.copy())
         depth_image = np.transpose(depth_image, axes = (2, 0, 1)) * 255.0 / 30.0
 
-        world_coords = sample['skeleton'][:self.num_joints]
+        world_coords = sample['skeleton']
         camera_coords = new_color_cam.world_to_camera(world_coords)
-        valid = sample['valid'][:self.num_joints]
+        valid = sample['valid']
 
         if do_flip:
             camera_coords = camera_coords[self.data_info.mirror]

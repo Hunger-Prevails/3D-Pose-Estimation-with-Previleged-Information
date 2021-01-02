@@ -36,7 +36,7 @@ def create_model(args):
         toy_keys = set(checkpoint.keys())
         model_keys = set(model.state_dict().keys())
 
-        assert(model_keys.difference(toy_keys).empty())
+        assert len(model_keys.difference(toy_keys)) == 0
         
         model.load_state_dict(checkpoint)
 
