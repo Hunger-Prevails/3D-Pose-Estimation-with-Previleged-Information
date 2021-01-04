@@ -127,7 +127,7 @@ class ResNet(nn.Module):
 
         super(ResNet, self).__init__()
 
-        self.inplanes = 64
+        self.do_distill = args.do_distill
         
         stride2 = int(np.minimum(np.maximum(np.log2(args.stride), 2), 3) - 1)
         stride3 = int(np.minimum(np.maximum(np.log2(args.stride), 3), 4) - 2)
@@ -139,6 +139,7 @@ class ResNet(nn.Module):
         self.bn1 = nn.BatchNorm2d(64)
         self.maxpool = nn.MaxPool2d(kernel_size = 3, stride = 2, padding = 1)
 
+        self.inplanes = 64
         self.layer1 = self._make_layer(block, 64, layers[0])
         self.layer2 = self._make_layer(block, 128, layers[1], stride = stride2, dilation = 3 - stride2)
         self.layer3 = self._make_layer(block, 256, layers[2], stride = stride3, dilation = 3 - stride3)
@@ -153,12 +154,7 @@ class ResNet(nn.Module):
                 m.weight.data.fill_(1)
                 m.bias.data.zero_()
 
-        self.regressor = nn.Conv2d(
-            in_channels = 512 * block.expansion,
-            out_channels = args.depth * args.num_joints,
-            kernel_size = 3,
-            padding = 1
-        )
+        self.regressor = nn.Conv2d(512 * block.expansion, args.depth * args.num_joints, 3, padding = 1)
 
     def _make_layer(self, block, planes, blocks, stride = 1, dilation = 1):
         downsample = None
@@ -192,12 +188,16 @@ class ResNet(nn.Module):
         x = self.layer2(x)
         x = self.layer3(x)
         x = self.layer4(x)
+        z = self.regressor(x)
 
-        return self.regressor(x)
+        if self.do_distill:
+            return z, x
+        else:
+            return z
 
 
-def resnet18(args):
-    if args.pretrain:
+def resnet18(args, pretrain):
+    if pretrain:
         model = ResNet(BasicBlock, [2, 2, 2, 2], args)
         toy_dict = torch.load(args.model_path)
         model_dict = model.state_dict()
@@ -221,8 +221,8 @@ def resnet18(args):
     return ResNet(BasicBlock, [2, 2, 2, 2], args)
 
 
-def resnet50(args):
-    if args.pretrain:
+def resnet50(args, pretrain):
+    if pretrain:
         model = ResNet(Bottleneck, [3, 4, 6, 3], args)
         toy_dict = torch.load(args.model_path)
         model_dict = model.state_dict()

@@ -20,6 +20,7 @@ class Trainer:
         self.half_acc = args.half_acc
         self.depth_only = args.depth_only
         self.do_fusion = args.do_fusion
+        self.do_distill = args.do_distill
 
         if args.half_acc:
             self.copy_params = [param.clone().detach() for param in self.list_params]
@@ -55,6 +56,115 @@ class Trainer:
 
         if args.n_cudas:
             self.criterion = self.criterion.cuda()
+
+
+    def set_teacher(self, teacher):
+        self.teacher = teacher.half() if self.half_acc else teacher
+
+
+    def distill_train(self, epoch, data_loader, cuda_device):
+        n_batches = len(data_loader)
+
+        dist_loss_sum = 0.0
+        cam_loss_sum = 0.0
+        total = 0
+
+        side_out = (self.side_in - 1) // self.stride + 1
+
+        for i, (color_image, depth_image, true_cam, valid_mask) in enumerate(data_loader):
+
+            if self.n_cudas:
+                color_image = color_image.half().to(cuda_device) if self.half_acc else color_image.to(cuda_device)
+                depth_image = depth_image.half().to(cuda_device) if self.half_acc else depth_image.to(cuda_device)
+
+                true_cam = true_cam.to(cuda_device)
+                valid_mask = valid_mask.to(cuda_device)
+
+            batch = true_cam.size(0)
+
+            with torch.no_grad():
+                teach_cam, teach_last = self.teacher(color_image, depth_image)
+                if self.half_acc:
+                    teach_last = teach_last.float()
+
+            cam_feat, last_feat = self.model(color_image)
+            if self.half_acc:
+                cam_feat = cam_feat.float()
+                last_feat = last_feat.float()
+
+            dist_loss = torch.linalg.norm((teach_last - last_feat).view(batch, -1), dim = -1).mean()
+
+            heat_cam = utils.to_heatmap(cam_feat, self.depth, self.num_joints, side_out, side_out)
+
+            key_index = self.data_info.key_index
+
+            relat_cam = utils.decode(heat_cam, self.depth_range)
+
+            relat_cam = relat_cam - relat_cam[:, key_index:key_index + 1]
+
+            spec_cam = relat_cam + true_cam[:, key_index:key_index + 1]
+
+            cam_loss = self.criterion(spec_cam.view(-1, 3)[valid_mask.view(-1)] / self.loss_div, true_cam.view(-1, 3)[valid_mask.view(-1)] / self.loss_div)
+
+            loss = dist_loss + cam_loss
+
+            print('| train Epoch[%d] [%d/%d]  Dist Loss %1.4f  Cam Loss %1.4f' % (epoch, i, n_batches, dist_loss.item(), cam_loss.item()))
+
+            dist_loss_sum += dist_loss.item() * batch
+            cam_loss_sum += cam_loss.item() * batch
+            total += batch
+
+            if self.half_acc:
+                loss *= self.grad_scaling
+
+                for h_param in self.list_params:
+
+                    if h_param.grad is None:
+                        continue
+
+                    h_param.grad.detach_()
+                    h_param.grad.zero_()
+
+                loss.backward()
+
+                self.optimizer.zero_grad()
+
+                do_update = True
+
+                for c_param, h_param in zip(self.copy_params, self.list_params):
+
+                    if h_param.grad is None:
+                        continue
+
+                    if torch.any(torch.isinf(h_param.grad)):
+                        do_update = False
+                        print('update step skipped')
+                        break
+
+                    c_param.grad.copy_(h_param.grad)
+                    c_param.grad /= self.grad_scaling
+
+                if do_update:
+                    nn.utils.clip_grad_norm_(self.copy_params, self.grad_norm)
+
+                    self.optimizer.step()
+
+                    for c_param, h_param in zip(self.copy_params, self.list_params):
+                        h_param.data.copy_(c_param.data)
+
+            else:
+                self.optimizer.zero_grad()
+                loss.backward()
+
+                nn.utils.clip_grad_norm_(self.list_params, self.grad_norm)
+                self.optimizer.step()
+
+        dist_loss_sum /= total
+        cam_loss_sum /= total
+
+        print('\n=> train Epoch[%d]  Dist Loss: %1.4f\n  Cam Loss: %1.4f\n' % (epoch, dist_loss_sum, cam_loss_sum))
+
+        return dict(dist_train_loss = dist_loss_sum, cam_train_loss = cam_loss_sum)
 
 
     def fusion_train(self, epoch, data_loader, cuda_device):
@@ -245,7 +355,9 @@ class Trainer:
         self.model.train()
         self.adapt_learn_rate(epoch)
 
-        if self.do_fusion:
+        if self.do_distill:
+            return self.distill_train(epoch, data_loader, torch.device('cuda'))
+        elif self.do_fusion:
             return self.fusion_train(epoch, data_loader, torch.device('cuda'))
         else:
             return self.vanilla_train(epoch, data_loader, torch.device('cuda'))
@@ -393,7 +505,7 @@ class Trainer:
     def adapt_learn_rate(self, epoch):
         if epoch - 1 < self.num_epochs * 0.6:
             learn_rate = self.learn_rate
-        elif epoch - 1 < self.num_epochs * 0.9:
+        elif epoch - 1 < self.num_epochs * 0.8:
             learn_rate = self.learn_rate * 0.2
         else:
             learn_rate = self.learn_rate * 0.04

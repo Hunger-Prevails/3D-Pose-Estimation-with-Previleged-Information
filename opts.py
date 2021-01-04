@@ -16,6 +16,7 @@ parser.add_argument('-joint_space', action='store_true', help='whether to allow 
 parser.add_argument('-do_track', action='store_true', help='whether to track cam coords via least square optim')
 parser.add_argument('-do_company', action='store_true', help='whether to use complement dataset')
 parser.add_argument('-do_fusion', action='store_true', help='whether to accept both color and depth input')
+parser.add_argument('-do_distill', action='store_true', help='whether to force a student to mimic its teacher')
 parser.add_argument('-depth_only', action='store_true', help='only accepts depth input')
 
 # augmentation options
@@ -27,6 +28,7 @@ parser.add_argument('-occluder', action='store_true', help='whether to perform o
 # required options
 parser.add_argument('-model', required=True, help='Backbone architecture')
 parser.add_argument('-model_path', required=True, help='Path to an imagenet pre-train or checkpoint')
+parser.add_argument('-teacher', help='Path to a checkpoint of the teacher model')
 parser.add_argument('-suffix', required=True, help='Model suffix')
 parser.add_argument('-data_name', required=True, help='name of dataset')
 parser.add_argument('-comp_name', help='name of complement dataset')
@@ -36,7 +38,7 @@ parser.add_argument('-data_down_path', required=True, help='Root path to crop im
 parser.add_argument('-comp_down_path', help='Root path to crop images of the complement dataset')
 parser.add_argument('-occ_path', help='Root path to occluders')
 parser.add_argument('-save_path', required=True, help='Path to save train record')
-parser.add_argument('-criterion', required=True, help='Type of objective function')
+parser.add_argument('-criterion', required=True, help='criterion function for estimation loss')
 
 # integer options
 parser.add_argument('-n_epochs', default=20, type=int, help='Training epochs')
