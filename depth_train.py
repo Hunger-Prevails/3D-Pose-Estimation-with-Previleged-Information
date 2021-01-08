@@ -48,9 +48,9 @@ class Trainer:
         self.loss_div = args.loss_div
 
         self.thresh = dict(
-            solid = args.thresh_solid,
-            close = args.thresh_close,
-            rough = args.thresh_rough
+            solid = args.thresh_solid * args.loss_div,
+            close = args.thresh_close * args.loss_div,
+            rough = args.thresh_rough * args.loss_div
         )
         self.criterion = nn.__dict__[args.criterion + 'Loss'](reduction = 'mean')
 
@@ -293,7 +293,7 @@ class Trainer:
 
             loss = self.criterion(spec_cam.view(-1, 3)[valid_mask.view(-1)] / self.loss_div, true_cam.view(-1, 3)[valid_mask.view(-1)] / self.loss_div)
 
-            print('| train Epoch[%d] [%d/%d]  Loss %1.4f' % (epoch, i, n_batches, loss.item()))
+            print('| train Epoch[%d] [%d/%d]  Loss %1.4f' % (epoch, i, n_batches, loss.item()), flush = True)
 
             loss_avg += loss.item() * batch
 

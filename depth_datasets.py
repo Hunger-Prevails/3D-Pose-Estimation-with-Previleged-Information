@@ -50,6 +50,7 @@ class Dataset(data.Dataset):
 
         self.mean = [0.485, 0.456, 0.406]
         self.dev = [0.229, 0.224, 0.225]
+        self.nexponent = args.nexponent
 
         self.transform = transforms.Compose([
             transforms.ToTensor(),
@@ -125,7 +126,8 @@ class Dataset(data.Dataset):
         depth_image, new_depth_cam = self.get_input_image(depth_image, depth_cam, sample['depth_bbox'], do_flip)
 
         color_image = self.transform(color_image.copy())
-        depth_image = np.transpose(depth_image, axes = (2, 0, 1)) * 255.0 / 30.0
+        depth_image = depth_image.squeeze()[np.newaxis, :, :]
+        depth_image = np.exp(-depth_image * 255.0 / 10.0) if self.nexponent else (depth_image * 255.0 / 30.0)
 
         world_coords = sample['skeleton']
         camera_coords = new_color_cam.world_to_camera(world_coords)

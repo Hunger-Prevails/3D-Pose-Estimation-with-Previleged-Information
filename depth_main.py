@@ -14,6 +14,7 @@ def create_model(args):
     assert not (args.resume and args.pretrain)
     assert not (args.do_fusion and args.depth_only)
     assert not (args.do_fusion and args.do_distill)
+    assert (args.depth_host <= args.do_fusion)
 
     model_creator = 'fusion' if args.do_fusion else 'depth'
     model_creator = importlib.import_module(model_creator + 'net')

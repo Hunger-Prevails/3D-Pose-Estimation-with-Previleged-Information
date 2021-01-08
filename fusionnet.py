@@ -227,35 +227,43 @@ class ResNet(nn.Module):
             return z
 
 
-def resnet18(args, pretrain):
+def manual_update(model_dict, toy_dict):
+    manual_keys = set()
+
+    for key in model_dict.keys():
+        if key.startswith('bn2') and key.replace('bn2', 'bn1') in toy_dict:
+            model_dict[key].data = torch.clone(toy_dict[key.replace('bn2', 'bn1')].data)
+            manual_keys.add(key)
+
+        if key.startswith('layer5') and key.replace('layer5', 'layer1') in toy_dict:
+            model_dict[key].data = torch.clone(toy_dict[key.replace('layer5', 'layer1')].data)
+            manual_keys.add(key)
+
+        if key.startswith('layer6') and key.replace('layer6', 'layer2') in toy_dict:
+            model_dict[key].data = torch.clone(toy_dict[key.replace('layer6', 'layer2')].data)
+            manual_keys.add(key)
+
+    model_dict['conv2.weight'].data = torch.clone(toy_dict['conv1.weight'].data[:, :1])
+    manual_keys.add('conv2.weight')
+
+    return manual_keys
+
+
+def build_resnet(block, layers, args, pretrain):
     if pretrain:
-        model = ResNet(BasicBlock, [2, 2, 2, 2], args)
-        toy_dict = torch.load(args.model_path)
+        model = ResNet(block, layers, args)
+
         model_dict = model.state_dict()
-        
-        manual_update = set()
+        toy_dict = torch.load(args.host_path)['model'] if args.depth_host else torch.load(args.model_path)
 
-        for key in model_dict.keys():
-            if key.startswith('bn2'):
-                if key.replace('bn2', 'bn1') in toy_dict:
-                    model_dict[key].data = torch.clone(toy_dict[key.replace('bn2', 'bn1')].data)
-                    manual_update.add(key)
-            if key.startswith('layer5'):
-                if key.replace('layer5', 'layer1') in toy_dict:
-                    model_dict[key].data = torch.clone(toy_dict[key.replace('layer5', 'layer1')].data)
-                    manual_update.add(key)
-            if key.startswith('layer6'):
-                if key.replace('layer6', 'layer2') in toy_dict:
-                    model_dict[key].data = torch.clone(toy_dict[key.replace('layer6', 'layer2')].data)
-                    manual_update.add(key)
+        manual_keys = manual_update(model_dict, toy_dict)
 
-        model_dict['conv2.weight'].data = torch.clone(toy_dict['conv1.weight'].data[:, :1])
-        manual_update.add('conv2.weight')
+        toy_dict = torch.load(args.model_path)
 
         model_keys = set(model_dict.keys())
         toy_keys = set(toy_dict.keys())
 
-        untended = model_keys.difference(toy_keys).difference(manual_update)
+        untended = model_keys.difference(toy_keys).difference(manual_keys)
         untended = [key for key in untended if not key.endswith('num_batches_tracked')]
 
         from_fusion = [key.startswith('fusion') for key in untended]
@@ -273,50 +281,12 @@ def resnet18(args, pretrain):
 
         return model
 
-    return ResNet(BasicBlock, [2, 2, 2, 2], args)
+    return ResNet(block, layers, args)
+
+
+def resnet18(args, pretrain):
+    return build_resnet(BasicBlock, [2, 2, 2, 2], args, pretrain)
 
 
 def resnet50(args, pretrain):
-    if pretrain:
-        model = ResNet(Bottleneck, [3, 4, 6, 3], args)
-        toy_dict = torch.load(args.model_path)
-        model_dict = model.state_dict()
-        
-        manual_update = set()
-
-        for key in model_dict.keys():
-            if key.startswith('bn2') and key.replace('bn2', 'bn1') in toy_dict:
-                model_dict[key].data = torch.clone(toy_dict[key.replace('bn2', 'bn1')].data)
-                manual_update.add(key)
-            if key.startswith('layer5') and key.replace('layer5', 'layer1') in toy_dict:
-                model_dict[key].data = torch.clone(toy_dict[key.replace('layer5', 'layer1')].data)
-                manual_update.add(key)
-            if key.startswith('layer6') and key.replace('layer6', 'layer2') in toy_dict:
-                model_dict[key].data = torch.clone(toy_dict[key.replace('layer6', 'layer2')].data)
-                manual_update.add(key)
-
-        model_dict['conv2.weight'].data = torch.clone(toy_dict['conv1.weight'].data[:, :1])
-        manual_update.add('conv2.weight')
-
-        model_keys = set(model_dict.keys())
-        toy_keys = set(toy_dict.keys())
-
-        untended = model_keys.difference(toy_keys).difference(manual_update)
-        untended = [key for key in untended if not key.endswith('num_batches_tracked')]
-
-        from_fusion = [key.startswith('fusion') for key in untended]
-        from_regressor = [key.startswith('regressor') for key in untended]
-
-        assert np.all(np.logical_or(from_fusion, from_regressor))
-
-        for key in toy_keys:
-            if key not in model_dict:
-                print('toy key [', key, '] discarded')
-                del toy_dict[key]
-        
-        model_dict.update(toy_dict)
-        model.load_state_dict(model_dict)
-
-        return model
-
-    return ResNet(Bottleneck, [3, 4, 6, 3], args)
+    return build_resnet(Bottleneck, [3, 4, 6, 3], args, pretrain)

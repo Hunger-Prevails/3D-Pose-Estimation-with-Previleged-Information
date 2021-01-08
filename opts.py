@@ -9,6 +9,7 @@ parser.add_argument('-save_record', action='store_true', help='Path to save trai
 parser.add_argument('-test_only', action='store_true', help='only performs test')
 parser.add_argument('-val_only', action='store_true', help='only performs validation')
 parser.add_argument('-pretrain', action='store_true', help='whether to load an imagenet pre-train')
+parser.add_argument('-depth_host', action='store_true', help='whether to fill the depth branch with weights from a depth-only pre-train')
 parser.add_argument('-resume', action='store_true', help='whether to continue from a previous checkpoint')
 parser.add_argument('-extra_channel', action='store_true', help='whether to append an extra channel that masks the bbox')
 parser.add_argument('-static_filter', action='store_true', help='whether to threshold static frames off')
@@ -18,6 +19,7 @@ parser.add_argument('-do_company', action='store_true', help='whether to use com
 parser.add_argument('-do_fusion', action='store_true', help='whether to accept both color and depth input')
 parser.add_argument('-do_distill', action='store_true', help='whether to force a student to mimic its teacher')
 parser.add_argument('-depth_only', action='store_true', help='only accepts depth input')
+parser.add_argument('-nexponent', action='store_true', help='whether to feed in the negative exponent of raw depth values')
 
 # augmentation options
 parser.add_argument('-geometry', action='store_true', help='whether to perform geometry augmentation')
@@ -29,6 +31,7 @@ parser.add_argument('-occluder', action='store_true', help='whether to perform o
 parser.add_argument('-model', required=True, help='Backbone architecture')
 parser.add_argument('-model_path', required=True, help='Path to an imagenet pre-train or checkpoint')
 parser.add_argument('-teacher', help='Path to a checkpoint of the teacher model')
+parser.add_argument('-host_path', help='Path to a checkpoint of the depth-only host model')
 parser.add_argument('-suffix', required=True, help='Model suffix')
 parser.add_argument('-data_name', required=True, help='name of dataset')
 parser.add_argument('-comp_name', help='name of complement dataset')
