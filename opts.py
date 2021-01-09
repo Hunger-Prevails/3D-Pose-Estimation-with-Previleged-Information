@@ -20,6 +20,7 @@ parser.add_argument('-do_fusion', action='store_true', help='whether to accept b
 parser.add_argument('-do_distill', action='store_true', help='whether to force a student to mimic its teacher')
 parser.add_argument('-depth_only', action='store_true', help='only accepts depth input')
 parser.add_argument('-nexponent', action='store_true', help='whether to feed in the negative exponent of raw depth values')
+parser.add_argument('-partial_conv', action='store_true', help='whether to replace all convs in Resnet with partial convs')
 
 # augmentation options
 parser.add_argument('-geometry', action='store_true', help='whether to perform geometry augmentation')

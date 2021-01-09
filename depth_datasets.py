@@ -126,8 +126,7 @@ class Dataset(data.Dataset):
         depth_image, new_depth_cam = self.get_input_image(depth_image, depth_cam, sample['depth_bbox'], do_flip)
 
         color_image = self.transform(color_image.copy())
-        depth_image = depth_image.squeeze()[np.newaxis, :, :]
-        depth_image = np.exp(-depth_image * 255.0 / 10.0) if self.nexponent else (depth_image * 255.0 / 30.0)
+        depth_image = utils.enhance(depth_image.squeeze(), self.nexponent)
 
         world_coords = sample['skeleton']
         camera_coords = new_color_cam.world_to_camera(world_coords)

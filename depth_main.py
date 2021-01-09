@@ -16,7 +16,7 @@ def create_model(args):
     assert not (args.do_fusion and args.do_distill)
     assert (args.depth_host <= args.do_fusion)
 
-    model_creator = 'fusion' if args.do_fusion else 'depth'
+    model_creator = 'fusion' if args.do_fusion else ('partial' if args.partial_conv else 'depth')
     model_creator = importlib.import_module(model_creator + 'net')
 
     assert hasattr(model_creator, args.model)
