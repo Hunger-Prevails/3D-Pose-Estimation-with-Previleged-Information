@@ -30,7 +30,7 @@ parser.add_argument('-occluder', action='store_true', help='whether to perform o
 
 # required options
 parser.add_argument('-model', required=True, help='Backbone architecture')
-parser.add_argument('-model_path', required=True, help='Path to an imagenet pre-train or checkpoint')
+parser.add_argument('-model_path', help='Path to an imagenet pre-train or checkpoint')
 parser.add_argument('-teacher', help='Path to a checkpoint of the teacher model')
 parser.add_argument('-host_path', help='Path to a checkpoint of the depth-only host model')
 parser.add_argument('-suffix', required=True, help='Model suffix')

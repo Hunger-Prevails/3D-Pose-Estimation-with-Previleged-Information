@@ -207,7 +207,7 @@ class ResNet(nn.Module):
 
     def forward(self, x):
 
-        veil = (x != 0).to(x)
+        veil = (x != 0).float()
 
         x, veil = self.conv1(x, veil)
         x = self.bn1(x)

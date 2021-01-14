@@ -28,43 +28,31 @@ class PartialConv(nn.Conv2d):
         self.slide_winsize = self.ones.shape[1] * self.ones.shape[2] * self.ones.shape[3]
 
         self.last_size = (None, None, None, None)
-        self.update_mask = None
-        self.mask_ratio = None
 
-    def forward(self, input, mask_in = None):
+    def forward(self, input, mask_in):
         assert len(input.shape) == 4
-        if mask_in is not None or self.last_size != tuple(input.shape):
-            self.last_size = tuple(input.shape)
 
-            with torch.no_grad():
-                if self.ones.type() != input.type():
-                    self.ones = self.ones.to(input)
+        with torch.no_grad():
+            if self.ones.type() != mask_in.type():
+                self.ones = self.ones.to(mask_in)
 
-                if mask_in is None:
-                    if self.multi_channel:
-                        mask = torch.ones(input.data.shape[0], input.data.shape[1], input.data.shape[2], input.data.shape[3]).to(input)
-                    else:
-                        mask = torch.ones(1, 1, input.data.shape[2], input.data.shape[3]).to(input)
-                else:
-                    mask = mask_in
+            mask_out = F.conv2d(mask_in, self.ones, bias = None, stride = self.stride, padding = self.padding, dilation = self.dilation)
 
-                self.update_mask = F.conv2d(mask, self.ones, bias = None, stride = self.stride, padding = self.padding, dilation = self.dilation)
+            multiplier = self.slide_winsize / (mask_out + 1e-6)
 
-                self.mask_ratio = self.slide_winsize / (self.update_mask + 1e-6)
+            mask_out = torch.clamp(mask_out, 0, 1)
+            multiplier = torch.mul(multiplier, mask_out).to(input)
 
-                self.update_mask = torch.clamp(self.update_mask, 0, 1)
-                self.mask_ratio = torch.mul(self.mask_ratio, self.update_mask)
-
-        raw_out = super(PartialConv, self).forward(torch.mul(input, mask) if mask_in is not None else input)
+        raw_out = super(PartialConv, self).forward(torch.mul(input, mask_in.to(input)))
 
         if self.bias is not None:
             bias_view = self.bias.view(1, self.out_channels, 1, 1)
-            output = torch.mul(raw_out - bias_view, self.mask_ratio) + bias_view
-            output = torch.mul(output, self.update_mask)
+            output = torch.mul(raw_out - bias_view, multiplier) + bias_view
+            output = torch.mul(output, mask_out)
         else:
-            output = torch.mul(raw_out, self.mask_ratio)
+            output = torch.mul(raw_out, multiplier)
 
         if self.return_mask:
-            return output, self.update_mask
+            return output, mask_out
         else:
             return output

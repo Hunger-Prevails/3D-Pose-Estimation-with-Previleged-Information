@@ -17,6 +17,7 @@ import torch.utils.data as data
 from torchvision import datasets
 from torchvision import transforms
 from depth_groups import by_sequence
+from augment_colour import random_color
 
 
 def get_data_loader(args, phase):
@@ -51,6 +52,7 @@ class Dataset(data.Dataset):
         self.mean = [0.485, 0.456, 0.406]
         self.dev = [0.229, 0.224, 0.225]
         self.nexponent = args.nexponent
+        self.colour = args.colour
 
         self.transform = transforms.Compose([
             transforms.ToTensor(),
@@ -120,12 +122,12 @@ class Dataset(data.Dataset):
 
         depth_image = os.path.join(self.data_root_path, seq_folder, sample['video'], image_name)
 
-        do_flip = np.random.rand() < 0.5
+        do_flip = (not self.at_test) and (np.random.rand() < 0.5)
 
         color_image, new_color_cam = self.get_input_image(sample['image'], sample['camera'], sample['bbox'], do_flip)
         depth_image, new_depth_cam = self.get_input_image(depth_image, depth_cam, sample['depth_bbox'], do_flip)
 
-        color_image = self.transform(color_image.copy())
+        color_image = self.transform(random_color(color_image) if self.colour else color_image.copy())
         depth_image = utils.enhance(depth_image.squeeze(), self.nexponent)
 
         world_coords = sample['skeleton']
@@ -149,6 +151,23 @@ class Dataset(data.Dataset):
     def __len__(self):
         return len(self.samples)
 
+    def viz(self, args):
+        cam_specs = np.load('./batch.npy')
+
+        for index in range(args.batch_size):
+
+            sample = self.samples[index]
+
+            seq_folder = os.path.join('nturgbd_depth_s' + sample['video'][1:4], 'nturgb+d_depth')
+
+            image_name = 'Depth-' + str(sample['frame'] + 1).zfill(8) + '.png'
+
+            depth_image = os.path.join(self.data_root_path, seq_folder, sample['video'], image_name)
+
+            depth_cam = self.depth_cams[sample['video'][:8]]
+
+            visualize(depth_image, depth_cam, sample['skeleton'], cam_specs[index], sample['depth_bbox'])
+
 
 def show_mat(image_coord, ax, bbox = None):
     '''
@@ -157,8 +176,8 @@ def show_mat(image_coord, ax, bbox = None):
     Args:
         image_coord: (21, 2)
     '''
-    from joint_settings import ntu_short_names as short_names
-    from joint_settings import ntu_parent as parent
+    from joint_settings import h36m_short_names as short_names
+    from joint_settings import h36m_parent as parent
 
     mapper = dict(zip(short_names, range(len(short_names))))
 
@@ -179,7 +198,7 @@ def show_mat(image_coord, ax, bbox = None):
         ax.add_patch(rect)
 
 
-def visualize(image_name, depth_cam, sample):
+def visualize(image_name, depth_cam, true_cam, spec_cam, depth_bbox):
     plt.figure(figsize = (16, 12))
 
     image = plt.imread(image_name) * 255.0
@@ -187,10 +206,10 @@ def visualize(image_name, depth_cam, sample):
 
     ax = plt.subplot(1, 2, 1)
     ax.imshow(image, cmap = 'gray', vmin = 0, vmax = 255)
-    show_mat(sample['depth'][:21], ax, sample['depth_bbox'])
+    show_mat(depth_cam.camera_to_image(spec_cam), ax, depth_bbox)
 
     ax = plt.subplot(1, 2, 2)
     ax.imshow(image, cmap = 'gray', vmin = 0, vmax = 255)
-    show_mat(depth_cam.world_to_image(sample['skeleton'][:21]), ax, sample['depth_bbox'])
+    show_mat(depth_cam.camera_to_image(true_cam), ax, depth_bbox)
 
     plt.show()

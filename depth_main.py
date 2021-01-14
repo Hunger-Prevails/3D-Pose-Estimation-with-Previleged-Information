@@ -99,8 +99,8 @@ def main():
         print('=> Teacher is ready')
 
     if args.test_only or args.val_only:
-        trainer.test(0, test_loader)
         print('=> Evaluation starts')
+        trainer.test(0, test_loader)
 
     else:
         start_epoch = logger.state['epoch'] + 1
