@@ -26,6 +26,10 @@ def by_sequence(phase, sample_file):
 	return cam_id[:4] in partitions[phase]
 
 
+def by_person(split, phase, sample):
+	return (sample['video'][:8] in split[phase]['configs']) and (sample['video'][8:12] in split[phase]['persons'])
+
+
 def make_ntu_sample(sample, cameras, image, args):
 	'''
 	Args:

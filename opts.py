@@ -21,6 +21,7 @@ parser.add_argument('-do_distill', action='store_true', help='whether to force a
 parser.add_argument('-depth_only', action='store_true', help='only accepts depth input')
 parser.add_argument('-nexponent', action='store_true', help='whether to feed in the negative exponent of raw depth values')
 parser.add_argument('-partial_conv', action='store_true', help='whether to replace all convs in Resnet with partial convs')
+parser.add_argument('-to_depth', action='store_true', help='whether to convert raw depth to actual depth')
 
 # augmentation options
 parser.add_argument('-geometry', action='store_true', help='whether to perform geometry augmentation')

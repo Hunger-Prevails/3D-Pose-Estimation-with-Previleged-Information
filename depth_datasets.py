@@ -1,6 +1,7 @@
 import os
 import cv2
 import copy
+import json
 import jpeg4py
 import numpy as np
 import random
@@ -16,7 +17,7 @@ import torch.utils.data as data
 
 from torchvision import datasets
 from torchvision import transforms
-from depth_groups import by_sequence
+from depth_groups import by_person
 from augment_colour import random_color
 
 
@@ -53,6 +54,7 @@ class Dataset(data.Dataset):
         self.dev = [0.229, 0.224, 0.225]
         self.nexponent = args.nexponent
         self.colour = args.colour
+        self.to_depth = args.to_depth
 
         self.transform = transforms.Compose([
             transforms.ToTensor(),
@@ -61,15 +63,16 @@ class Dataset(data.Dataset):
     def get_samples(self, args, phase):
         sample_files = glob.glob(os.path.join(args.data_root_path, 'final_samples', '*.pkl'))
 
-        sample_files = [file for file in sample_files if by_sequence(phase, file)]
-
         samples = []
 
         for sample_file in sample_files:
             with open(sample_file, 'rb') as file:
                 samples += pickle.load(file)
 
-        return samples
+        with open(os.path.join(args.data_root_path, 'split.json')) as file:
+            split = json.load(file)
+
+        return [sample for sample in samples if by_person(split, phase, sample)]
 
     def get_input_image(self, image_path, camera, bbox, do_flip):
         '''
@@ -128,7 +131,13 @@ class Dataset(data.Dataset):
         depth_image, new_depth_cam = self.get_input_image(depth_image, depth_cam, sample['depth_bbox'], do_flip)
 
         color_image = self.transform(random_color(color_image) if self.colour else color_image.copy())
-        depth_image = utils.enhance(depth_image.squeeze(), self.nexponent)
+
+        depth_image = depth_image.squeeze()
+
+        if self.to_depth:
+            depth_image = utils.to_depth(depth_image, depth_cam)
+
+        depth_image = utils.enhance(depth_image, self.nexponent)
 
         world_coords = sample['skeleton']
         camera_coords = new_color_cam.world_to_camera(world_coords)

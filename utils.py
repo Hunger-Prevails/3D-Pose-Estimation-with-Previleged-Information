@@ -11,6 +11,16 @@ import pyyolo
 from builtins import zip as xzip
 
 
+def to_depth(image, depth_cam):
+	coord_u, coord_v = np.meshgrid(range(image.shape[1]), range(image.shape[0]))
+
+	coords = np.stack([coord_u, coord_v], axis = -1).reshape(-1, 2)
+
+	unprojection = depth_cam.image_to_camera(coords).reshape(image.shape[0], image.shape[1], -1)
+
+	return image / np.sqrt(np.sum(unprojection ** 2, axis = -1) + 1)
+
+
 def enhance(image, nexponent):
 	image = image / (10.0 / 255.0)
 
