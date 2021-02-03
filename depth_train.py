@@ -6,6 +6,13 @@ import utils
 
 from torch.autograd import Variable
 
+
+def wrap_by_name(names, params):
+    param_convs = [param for name, param in zip(names, params) if 'bn' in name]
+    param_bns = [param for name, param in zip(names, params) if 'bn' not in name]
+    return [dict(params = param_convs), dict(params = param_bns)]
+
+
 class Trainer:
 
     def __init__(self, args, model, data_info):
@@ -15,12 +22,14 @@ class Trainer:
         self.model = model
         self.data_info = data_info
 
-        self.list_params = list(model.parameters())
+        self.list_params = [param for name, param in model.named_parameters()]
+        self.list_names = [name for name, param in model.named_parameters()]
 
         self.half_acc = args.half_acc
         self.depth_only = args.depth_only
         self.do_fusion = args.do_fusion
         self.do_distill = args.do_distill
+        self.partial_conv = args.partial_conv
 
         if args.half_acc:
             self.copy_params = [param.clone().detach() for param in self.list_params]
@@ -30,9 +39,9 @@ class Trainer:
                 param.requires_grad = True
                 param.grad = param.data.new_zeros(param.size())
 
-            self.optimizer = optim.Adam(self.copy_params, args.learn_rate, weight_decay = args.weight_decay)
+            self.optimizer = optim.Adam(wrap_by_name(self.list_names, self.copy_params), args.learn_rate, weight_decay = args.weight_decay)
         else:
-            self.optimizer = optim.Adam(self.list_params, args.learn_rate, weight_decay = args.weight_decay)
+            self.optimizer = optim.Adam(wrap_by_name(self.list_names, self.list_params), args.learn_rate, weight_decay = args.weight_decay)
 
         self.n_cudas = args.n_cudas
         self.depth = args.depth
@@ -505,13 +514,19 @@ class Trainer:
     def adapt_learn_rate(self, epoch):
         if epoch - 1 < self.num_epochs * 0.6:
             learn_rate = self.learn_rate
+            learn_rate_bn = self.learn_rate
+
         elif epoch - 1 < self.num_epochs * 0.8:
             learn_rate = self.learn_rate * 0.2
+            learn_rate_bn = self.learn_rate * 0.1 if self.partial_conv else learn_rate
+
         else:
             learn_rate = self.learn_rate * 0.04
+            learn_rate_bn = self.learn_rate * 0.01 if self.partial_conv else learn_rate
 
         if epoch == 1:
             learn_rate /= 2
+            learn_rate_bn /= 2
 
-        for group in self.optimizer.param_groups:
-            group['lr'] = learn_rate
+        self.optimizer.param_groups[0]['lr'] = learn_rate
+        self.optimizer.param_groups[1]['lr'] = learn_rate_bn
