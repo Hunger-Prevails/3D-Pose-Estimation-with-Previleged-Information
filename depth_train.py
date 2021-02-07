@@ -29,7 +29,6 @@ class Trainer:
         self.depth_only = args.depth_only
         self.do_fusion = args.do_fusion
         self.do_distill = args.do_distill
-        self.partial_conv = args.partial_conv
 
         if args.half_acc:
             self.copy_params = [param.clone().detach() for param in self.list_params]
@@ -50,8 +49,12 @@ class Trainer:
         self.stride = args.stride
         self.depth_range = args.depth_range
 
+        self.warmup = args.warmup
         self.learn_rate = args.learn_rate
         self.num_epochs = args.n_epochs
+
+        self.freeze_factor = args.freeze_factor
+        self.warmup_factor = args.warmup_factor
         self.grad_norm = args.grad_norm
         self.grad_scaling = args.grad_scaling
         self.loss_div = args.loss_div
@@ -512,21 +515,21 @@ class Trainer:
 
 
     def adapt_learn_rate(self, epoch):
-        if epoch - 1 < self.num_epochs * 0.6:
+        if epoch - 1 < self.warmup:
+            learn_rate = self.learn_rate * self.warmup_factor
+            learn_rate_bn = self.learn_rate * self.warmup_factor
+
+        elif epoch - 1 < self.num_epochs * 0.6:
             learn_rate = self.learn_rate
             learn_rate_bn = self.learn_rate
 
         elif epoch - 1 < self.num_epochs * 0.8:
             learn_rate = self.learn_rate * 0.2
-            learn_rate_bn = self.learn_rate * 0.1 if self.partial_conv else learn_rate
+            learn_rate_bn = self.learn_rate * self.freeze_factor
 
         else:
             learn_rate = self.learn_rate * 0.04
-            learn_rate_bn = self.learn_rate * 0.01 if self.partial_conv else learn_rate
-
-        if epoch == 1:
-            learn_rate /= 2
-            learn_rate_bn /= 2
+            learn_rate_bn = self.learn_rate * (self.freeze_factor ** 2)
 
         self.optimizer.param_groups[0]['lr'] = learn_rate
         self.optimizer.param_groups[1]['lr'] = learn_rate_bn

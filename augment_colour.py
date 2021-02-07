@@ -39,7 +39,7 @@ def augment_saturation(image, space):
     if space != 'hsv':
         image = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
 
-    image[:, :, 1] *= np.random.uniform(0.6, 1.5)
+    image[:, :, 1] *= np.random.uniform(0.8, 1.25)
     image[:, :, 1] = np.clip(image[:, :, 1], 0, 1)
 
     return image, 'hsv'

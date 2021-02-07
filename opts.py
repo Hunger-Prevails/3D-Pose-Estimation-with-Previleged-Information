@@ -46,7 +46,8 @@ parser.add_argument('-save_path', required=True, help='Path to save train record
 parser.add_argument('-criterion', required=True, help='criterion function for estimation loss')
 
 # integer options
-parser.add_argument('-n_epochs', default=20, type=int, help='Training epochs')
+parser.add_argument('-warmup', default=1, type=int, help='number of warmup epochs')
+parser.add_argument('-n_epochs', default=20, type=int, help='number of total epochs')
 parser.add_argument('-batch_size', default=64, type=int, help='Size of mini-batches for each iteration')
 parser.add_argument('-n_cudas', default=2, type=int, help='Number of cuda devices available')
 parser.add_argument('-workers', default=2, type=int, help='Number of subprocesses to load data')
@@ -58,7 +59,9 @@ parser.add_argument('-num_valid', default=7, type=int, help='minimum number of v
 parser.add_argument('-depth', default=16, type=int, help='depth side of volumetric heatmap')
 
 # train options
-parser.add_argument('-learn_rate', default=5e-5, type=float, help='Base learning rate for train')
+parser.add_argument('-warmup_factor', default=0.2, type=float, help='learn rate decay for warmup epochs')
+parser.add_argument('-freeze_factor', default=0.2, type=float, help='learn rate decay for batchnorm layers')
+parser.add_argument('-learn_rate', default=5e-5, type=float, help='base learn rate for train')
 parser.add_argument('-grad_norm', default=5.0, type=float, help='norm for gradient clip')
 parser.add_argument('-grad_scaling', default=32.0, type=float, help='magnitude of loss scaling when performing float16 computation')
 parser.add_argument('-momentum', default=0.9, type=float, help='Momentum for training')

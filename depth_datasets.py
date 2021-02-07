@@ -54,6 +54,8 @@ class Dataset(data.Dataset):
         self.dev = [0.229, 0.224, 0.225]
         self.nexponent = args.nexponent
         self.colour = args.colour
+        self.geometry = args.geometry
+        self.random_zoom = args.random_zoom
         self.to_depth = args.to_depth
 
         self.transform = transforms.Compose([
@@ -74,7 +76,7 @@ class Dataset(data.Dataset):
 
         return [sample for sample in samples if by_person(split, phase, sample)]
 
-    def get_input_image(self, image_path, camera, bbox, do_flip):
+    def get_input_image(self, image_path, camera, bbox, do_flip, random_zoom):
         '''
         Turn towards the center of bbox then crop a square-shaped image aligned with the height of the bbox
         Args:
@@ -108,6 +110,9 @@ class Dataset(data.Dataset):
         new_cam.zoom(self.side_in / far_dist)
         new_cam.center_principal_point((self.side_in, self.side_in))
 
+        if (not self.at_test) and self.geometry:
+            new_cam.zoom(random_zoom)
+
         if do_flip:
             new_cam.horizontal_flip()
 
@@ -127,8 +132,10 @@ class Dataset(data.Dataset):
 
         do_flip = (not self.at_test) and (np.random.rand() < 0.5)
 
-        color_image, new_color_cam = self.get_input_image(sample['image'], sample['camera'], sample['bbox'], do_flip)
-        depth_image, new_depth_cam = self.get_input_image(depth_image, depth_cam, sample['depth_bbox'], do_flip)
+        random_zoom = np.random.uniform(self.random_zoom, self.random_zoom ** (-1))
+
+        color_image, new_color_cam = self.get_input_image(sample['image'], sample['camera'], sample['bbox'], do_flip, random_zoom)
+        depth_image, new_depth_cam = self.get_input_image(depth_image, depth_cam, sample['depth_bbox'], do_flip, random_zoom)
 
         color_image = self.transform(random_color(color_image) if self.colour else color_image.copy())
 
