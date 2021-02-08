@@ -112,7 +112,7 @@ class ResNet(nn.Module):
 
     def __init__(self, block, layers, args):
         
-        assert args.stride in [4, 8, 16, 32]
+        assert args.stride in [16, 32]
 
         super(ResNet, self).__init__()
 

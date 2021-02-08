@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import numpy as np
 import torch.utils.model_zoo as model_zoo
 
+from partial_conv import PartialConv
 
 __all__ = ['Bottleneck', 'ResNet', 'resnet18', 'resnet50']
 
@@ -21,10 +22,14 @@ def conv3x3(in_planes, out_planes, stride = 1):
 class BasicBlock(nn.Module):
     expansion = 1
 
-    def __init__(self, inplanes, planes, stride=1, dilation=1, downsample=None):
+    def __init__(self, inplanes, planes, stride = 1, dilation = 1, downsample = None, partial = False):
         super(BasicBlock, self).__init__()
 
-        self.conv1 = nn.Conv2d(
+        self.partial = partial
+
+        Conv = PartialConv if partial else nn.Conv2d
+
+        self.conv1 = Conv(
             in_channels = inplanes,
             out_channels = planes,
             kernel_size = 3,
@@ -35,7 +40,7 @@ class BasicBlock(nn.Module):
         )
         self.bn1 = nn.BatchNorm2d(planes)
 
-        self.conv2 = nn.Conv2d(
+        self.conv2 = Conv(
             in_channels = planes,
             out_channels = planes,
             kernel_size = 3,
@@ -48,7 +53,10 @@ class BasicBlock(nn.Module):
         self.stride = stride
 
     def forward(self, x):
-        residual = x
+        if self.partial:
+            return self.forward_partial(*x)
+
+        res = x
 
         out = self.conv1(x)
         out = self.bn1(out)
@@ -58,18 +66,37 @@ class BasicBlock(nn.Module):
         out = self.bn2(out)
 
         if self.downsample is not None:
-            residual = self.downsample(x)
+            res = self.downsample(res)
 
-        return F.relu(out + residual)
+        return F.relu(out + res)
+
+    def forward_partial(self, x, veil):
+        res_x = x
+
+        out, veil = self.conv1(x, veil)
+        out = self.bn1(out)
+        out = F.relu(out)
+
+        out, veil = self.conv2(out, veil)
+        out = self.bn2(out)
+
+        if self.downsample is not None:
+            res_x = self.downsample(res_x)
+
+        return (F.relu(out + res_x), veil)
 
 
 class Bottleneck(nn.Module):
     expansion = 4
 
-    def __init__(self, inplanes, planes, stride=1, dilation=1, downsample=None):
+    def __init__(self, inplanes, planes, stride = 1, dilation = 1, downsample = None, partial = False):
         super(Bottleneck, self).__init__()
 
-        self.conv1 = nn.Conv2d(
+        self.partial = partial
+
+        Conv = PartialConv if partial else nn.Conv2d
+
+        self.conv1 = Conv(
             in_channels = inplanes,
             out_channels = planes,
             kernel_size = 1,
@@ -77,7 +104,7 @@ class Bottleneck(nn.Module):
         )
         self.bn1 = nn.BatchNorm2d(planes)
 
-        self.conv2 = nn.Conv2d(
+        self.conv2 = Conv(
             in_channels = planes,
             out_channels = planes,
             kernel_size = 3,
@@ -88,7 +115,7 @@ class Bottleneck(nn.Module):
         )
         self.bn2 = nn.BatchNorm2d(planes)
 
-        self.conv3 = nn.Conv2d(
+        self.conv3 = Conv(
             in_channels = planes,
             out_channels = planes * 4,
             kernel_size = 1,
@@ -100,7 +127,10 @@ class Bottleneck(nn.Module):
         self.stride = stride
 
     def forward(self, x):
-        residual = x
+        if self.partial:
+            return self.forward_partial(*x)
+
+        res = x
 
         out = self.conv1(x)
         out = self.bn1(out)
@@ -114,9 +144,28 @@ class Bottleneck(nn.Module):
         out = self.bn3(out)
 
         if self.downsample is not None:
-            residual = self.downsample(x)
+            res = self.downsample(res)
 
-        return F.relu(out + residual)
+        return F.relu(out + res)
+
+    def forward_partial(self, x, veil):
+        res_x = x
+
+        out, veil = self.conv1(x, veil)
+        out = self.bn1(out)
+        out = F.relu(out)
+
+        out, veil = self.conv2(out, veil)
+        out = self.bn2(out)
+        out = F.relu(out)
+
+        out, veil = self.conv3(out, veil)
+        out = self.bn3(out)
+
+        if self.downsample is not None:
+            res_x = self.downsample(res_x)
+
+        return (F.relu(out + res_x), veil)
 
 
 class Fusion(nn.Module):
@@ -140,15 +189,13 @@ class ResNet(nn.Module):
 
         super(ResNet, self).__init__()
 
-        self.do_distill = args.do_distill
-
         stride2 = int(np.minimum(np.maximum(np.log2(args.stride), 2), 3) - 1)
         stride3 = int(np.minimum(np.maximum(np.log2(args.stride), 3), 4) - 2)
         stride4 = int(np.minimum(np.maximum(np.log2(args.stride), 4), 5) - 3)
 
         side_out = (args.side_in - 1) / args.stride + 1
 
-        self.conv1 = nn.Conv2d(3, 64, kernel_size = 7, stride = 2, padding = 3, bias = False)
+        self.conv1 = PartialConv(3, 64, kernel_size = 7, stride = 2, padding = 3, bias = False)
         self.conv2 = nn.Conv2d(1, 64, kernel_size = 7, stride = 2, padding = 3, bias = False)
         
         self.bn1 = nn.BatchNorm2d(64)
@@ -166,8 +213,8 @@ class ResNet(nn.Module):
         self.layer4 = self._make_layer(block, 512, layers[3], stride = stride4, dilation = 3 - stride4)
 
         self.inplanes = 64
-        self.layer5 = self._make_layer(block, 64, layers[0])
-        self.layer6 = self._make_layer(block, 128, layers[1], stride = stride2, dilation = 3 - stride2)
+        self.layer5 = self._make_layer(block, 64, layers[0], partial = True)
+        self.layer6 = self._make_layer(block, 128, layers[1], stride = stride2, dilation = 3 - stride2, partial = True)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -180,51 +227,46 @@ class ResNet(nn.Module):
 
         self.regressor = nn.Conv2d(512 * block.expansion, args.depth * args.num_joints, 3, padding = 1)
 
-    def _make_layer(self, block, planes, blocks, stride = 1, dilation = 1):
+    def _make_layer(self, block, planes, blocks, stride = 1, dilation = 1, partial = False):
         downsample = None
         if stride != 1 or self.inplanes != planes * block.expansion:
-            downsample = nn.Sequential(
-                nn.Conv2d(
-                    in_channels = self.inplanes,
-                    out_channels = planes * block.expansion,
-                    kernel_size = 1,
-                    stride = stride,
-                    bias = False
-                ),
-                nn.BatchNorm2d(planes * block.expansion),
-            )
+            downsample = []
+            downsample.append(nn.Conv2d(self.inplanes, planes * block.expansion, 1, stride = stride, bias = False))
+            downsample.append(nn.BatchNorm2d(planes * block.expansion))
+            downsample = nn.Sequential(*downsample)
 
         layers = []
-        layers.append(block(self.inplanes, planes, stride, dilation, downsample))
+        layers.append(block(self.inplanes, planes, stride, dilation, downsample, partial = partial))
         self.inplanes = planes * block.expansion
         for i in range(1, blocks):
-            layers.append(block(self.inplanes, planes))
+            layers.append(block(self.inplanes, planes, partial = partial))
 
         return nn.Sequential(*layers)
 
     def forward(self, x, y):
         x = self.conv1(x)
-        y = self.conv2(y)
         x = self.bn1(x)
-        y = self.bn2(y)
         x = self.maxpool(F.relu(x))
+
+        veil = (y != 0).float()
+
+        y, veil = self.conv2(y, veil)
+        y = self.bn2(y)
         y = self.maxpool(F.relu(y))
+        veil = self.maxpool(veil)
 
         x = self.layer1(x)
-        y = self.layer5(y)
         x = self.layer2(x)
-        y = self.layer6(y)
+
+        y, veil = self.layer5((y, veil))
+        y, veil = self.layer6((y, veil))
 
         x = self.fusion(x, y)
 
         x = self.layer3(x)
         x = self.layer4(x)
-        z = self.regressor(x)
 
-        if self.do_distill:
-            return z, x
-        else:
-            return z
+        return self.regressor(x)
 
 
 def manual_update(model_dict, toy_dict):

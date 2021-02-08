@@ -13,10 +13,13 @@ from depth_train import Trainer
 def create_model(args):
     assert not (args.resume and args.pretrain)
     assert not (args.do_fusion and args.depth_only)
-    assert not (args.do_fusion and args.do_distill)
     assert (args.depth_host <= args.do_fusion)
 
-    model_creator = 'fusion' if args.do_fusion else ('partial' if args.partial_conv else 'depth')
+    model_creator = 'fusion' if args.do_fusion else 'depth'
+
+    if args.partial_conv:
+        model_creator = 'partial_' + model_creator
+
     model_creator = importlib.import_module(model_creator + 'net')
 
     assert hasattr(model_creator, args.model)
@@ -56,23 +59,6 @@ def create_model(args):
     return model, state
 
 
-def set_teacher(trainer, args):
-    print('=> Loading teacher model from ' + args.teacher)
-    checkpoint = torch.load(args.teacher)
-
-    model_creator = 'fusion'
-    model_creator = importlib.import_module(model_creator + 'net')
-
-    assert hasattr(model_creator, args.model)
-    teacher = getattr(model_creator, args.model)(args, False)
-    teacher.load_state_dict(checkpoint['model'])
-
-    if args.n_cudas:
-        teacher = teacher.cuda() if args.n_cudas == 1 else nn.DataParallel(teacher, device_ids = range(args.n_cudas)).cuda()
-
-    trainer.set_teacher(teacher)
-
-
 def main():
     model, state = create_model(args)
     print('=> Model and criterion are ready')
@@ -93,10 +79,6 @@ def main():
 
     trainer = Trainer(args, model, data_info)
     print('=> Trainer is ready')
-
-    if args.do_distill:
-        set_teacher(trainer, args)
-        print('=> Teacher is ready')
 
     if args.test_only or args.val_only:
         print('=> Evaluation starts')

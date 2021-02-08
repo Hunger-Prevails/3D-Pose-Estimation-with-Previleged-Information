@@ -74,6 +74,7 @@ class BasicBlock(nn.Module):
 
         return (F.relu(out + res_x), veil)
 
+
 class Bottleneck(nn.Module):
     expansion = 4
 
@@ -161,7 +162,7 @@ class ResNet(nn.Module):
     def __init__(self, block, layers, args):
         
         assert args.depth_only
-        assert args.stride in [4, 8, 16, 32]
+        assert args.stride in [16, 32]
 
         super(ResNet, self).__init__()
 
@@ -175,7 +176,7 @@ class ResNet(nn.Module):
 
         self.inplanes = 64
         self.layer1 = self._make_layer(block, 64, layers[0], partial = True)
-        self.layer2 = self._make_layer(block, 128, layers[1], stride = stride2, dilation = 3 - stride2)
+        self.layer2 = self._make_layer(block, 128, layers[1], stride = stride2, dilation = 3 - stride2, partial = True)
         self.layer3 = self._make_layer(block, 256, layers[2], stride = stride3, dilation = 3 - stride3)
         self.layer4 = self._make_layer(block, 512, layers[3], stride = stride4, dilation = 3 - stride4)
 
@@ -211,12 +212,12 @@ class ResNet(nn.Module):
 
         x, veil = self.conv1(x, veil)
         x = self.bn1(x)
-        x = F.relu(x)
-        x = self.maxpool(x)
+        x = self.maxpool(F.relu(x))
         veil = self.maxpool(veil)
 
         x, veil = self.layer1((x, veil))
-        x = self.layer2(x)
+        x, veil = self.layer2((x, veil))
+
         x = self.layer3(x)
         x = self.layer4(x)
 
