@@ -28,7 +28,7 @@ class Trainer:
         self.half_acc = args.half_acc
         self.depth_only = args.depth_only
         self.do_fusion = args.do_fusion
-        self.do_distill = args.do_distill
+        self.do_teach = args.do_teach
 
         if args.half_acc:
             self.copy_params = [param.clone().detach() for param in self.list_params]
@@ -367,7 +367,7 @@ class Trainer:
         self.model.train()
         self.adapt_learn_rate(epoch)
 
-        if self.do_distill:
+        if self.do_teach:
             return self.distill_train(epoch, data_loader, torch.device('cuda'))
         elif self.do_fusion:
             return self.fusion_train(epoch, data_loader, torch.device('cuda'))
@@ -528,7 +528,7 @@ class Trainer:
             learn_rate_bn = self.learn_rate * self.freeze_factor
 
         else:
-            learn_rate = self.learn_rate * 0.04
+            learn_rate = self.learn_rate * (0.2 ** 2)
             learn_rate_bn = self.learn_rate * (self.freeze_factor ** 2)
 
         self.optimizer.param_groups[0]['lr'] = learn_rate

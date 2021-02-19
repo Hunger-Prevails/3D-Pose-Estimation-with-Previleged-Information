@@ -17,7 +17,7 @@ parser.add_argument('-joint_space', action='store_true', help='whether to allow 
 parser.add_argument('-do_track', action='store_true', help='whether to track cam coords via least square optim')
 parser.add_argument('-do_company', action='store_true', help='whether to use complement dataset')
 parser.add_argument('-do_fusion', action='store_true', help='whether to accept both color and depth input')
-parser.add_argument('-do_distill', action='store_true', help='whether to force a student to mimic its teacher')
+parser.add_argument('-do_teach', action='store_true', help='whether to force a student to mimic its teacher')
 parser.add_argument('-depth_only', action='store_true', help='only accepts depth input')
 parser.add_argument('-nexponent', action='store_true', help='whether to feed in the negative exponent of raw depth values')
 parser.add_argument('-partial_conv', action='store_true', help='whether to replace all convs in Resnet with partial convs')
@@ -32,7 +32,7 @@ parser.add_argument('-occluder', action='store_true', help='whether to perform o
 # required options
 parser.add_argument('-model', required=True, help='Backbone architecture')
 parser.add_argument('-model_path', help='Path to an imagenet pre-train or checkpoint')
-parser.add_argument('-teacher', help='Path to a checkpoint of the teacher model')
+parser.add_argument('-teacher_path', help='Path to a checkpoint of the teacher model')
 parser.add_argument('-host_path', help='Path to a checkpoint of the depth-only host model')
 parser.add_argument('-suffix', required=True, help='Model suffix')
 parser.add_argument('-data_name', required=True, help='name of dataset')

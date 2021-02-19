@@ -162,19 +162,19 @@ def statistics(basic, flip, tangent, thresh):
 
 	count = float(dist['basic'].size)
 
-	keys = ('solid', 'close', 'jitter', 'depth', 'switch', 'fail')
+	keys = ('solid', 'close', 'depth', 'jitter', 'switch', 'fail')
 
 	solid = count_and_eliminate(dist['basic'] <= thresh['solid']) / count
-	
+
 	close = count_and_eliminate(dist['basic'] <= thresh['close']) / count
-	
-	jitter = count_and_eliminate(dist['basic'] <= thresh['rough']) / count
-	
+
 	depth = count_and_eliminate(dist['tangent'] <= thresh['close']) / count
+
+	jitter = count_and_eliminate(dist['basic'] <= thresh['rough']) / count
 
 	switch = count_and_eliminate(dist['flip'] <= thresh['rough']) / count
 
-	return dict(zip(keys, (solid, close, jitter, depth, switch, dist['basic'].size / count)))
+	return dict(zip(keys, (solid, close, depth, jitter, switch, dist['basic'].size / count)))
 
 
 def parse_epoch(stats):

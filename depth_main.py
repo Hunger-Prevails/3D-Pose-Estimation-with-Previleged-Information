@@ -59,8 +59,45 @@ def create_model(args):
     return model, state
 
 
+def create_pair(args):
+    assert not (args.resume and args.pretrain)
+    assert not (args.do_fusion and args.depth_only)
+    assert not args.depth_host
+    assert not args.depth_only
+    assert not args.test_only
+    assert not args.valid_only
+
+    teacher_creator = 'fusion' if args.do_fusion else 'depth'
+
+    if args.partial_conv:
+        teacher_creator = 'partial_' + teacher_creator
+
+    teacher_creator = importlib.import_module(teacher_creator + 'net')
+
+    assert hasattr(teacher_creator, args.model)
+    teacher = getattr(teacher_creator, args.model)(args, False)
+
+    textbook = torch.load(args.teacher_path)['model']
+    teacher.load_state_dict(textbook)
+
+    model_creator = importlib.import_module('depthnet')
+
+    assert hasattr(model_creator, args.model)
+    model = getattr(model_creator, args.model)(args, args.pretrain)
+    state = None
+
+    if args.n_cudas:
+        cudnn.benchmark = True
+        model = model.cuda() if args.n_cudas == 1 else nn.DataParallel(model, device_ids = range(args.n_cudas)).cuda()
+        teacher = teacher.cuda() if args.n_cudas == 1 else nn.DataParallel(model, device_ids = range(args.n_cudas)).cuda()
+
+    return model, teacher, state
+
 def main():
-    model, state = create_model(args)
+    if args.do_teach:
+        model, teacher, state = create_pair(args)
+    else:
+        model, state = create_model(args)
     print('=> Model and criterion are ready')
 
     if args.test_only:
@@ -80,9 +117,13 @@ def main():
     trainer = Trainer(args, model, data_info)
     print('=> Trainer is ready')
 
+    if args.do_teach:
+        trainer.set_teacher(teacher)
+
     if args.test_only or args.val_only:
         print('=> Evaluation starts')
-        trainer.test(0, test_loader)
+        test_rec = trainer.test(0, test_loader)
+        logger.print_rec(test_rec)
 
     else:
         start_epoch = logger.state['epoch'] + 1

@@ -20,7 +20,7 @@ class Logger:
         self.do_track = args.do_track
         self.joint_space = args.joint_space
         self.save_record = args.save_record
-        self.train_record = torch.load(os.path.join(self.save_path, 'train_record.pth')) if args.resume else None
+        self.train_record = None
 
 
     def record(self, epoch, train_recs, test_recs, model):
@@ -96,3 +96,7 @@ class Logger:
             message += '  recon_auc: %6.3f' % (self.state['best_recon_auc'])
 
         print(message)
+
+    def print_rec(self, record):
+        for key, value in record.items():
+            print('[' + key + ']: {:.4f}'.format(value))
