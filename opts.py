@@ -67,7 +67,7 @@ parser.add_argument('-grad_scaling', default=32.0, type=float, help='magnitude o
 parser.add_argument('-momentum', default=0.9, type=float, help='Momentum for training')
 parser.add_argument('-weight_decay', default=4e-5, type=float, help='Weight decay for training')
 parser.add_argument('-box_margin', default=0.6, type=float, help='factor for generating pseudo bbox from image coords')
-parser.add_argument('-comp_loss_weight', default=0.5, type=float, help='loss weight for complement train samples')
+parser.add_argument('-alpha', default=0.5, type=float, help='loss weight for alpha blend')
 parser.add_argument('-depth_range', default=100.0, type=float, help='depth range of prediction')
 parser.add_argument('-random_zoom', default=0.9, type=float, help='scale for random zoom operation')
 parser.add_argument('-beta', default=1.0, type=float, help='beta index for smooth L1 loss function')

@@ -221,7 +221,7 @@ class ResNet(nn.Module):
         x = self.layer4(x)
         z = self.regressor(x)
 
-        if self.do_teach:
+        if self.do_teach and self.training:
             return z, x
         else:
             return z

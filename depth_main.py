@@ -65,7 +65,7 @@ def create_pair(args):
     assert not args.depth_host
     assert not args.depth_only
     assert not args.test_only
-    assert not args.valid_only
+    assert not args.val_only
 
     teacher_creator = 'fusion' if args.do_fusion else 'depth'
 

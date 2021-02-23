@@ -21,7 +21,7 @@ class Trainer:
         self.list_params = list(model.parameters())
 
         if args.do_company:
-            self.alpha = args.comp_loss_weight
+            self.alpha = args.alpha
 
             self.comp_linear = nn.Linear(args.num_joints, args.num_joints)
             nn.init.eye_(self.comp_linear.weight)

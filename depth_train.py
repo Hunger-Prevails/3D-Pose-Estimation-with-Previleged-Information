@@ -55,6 +55,7 @@ class Trainer:
 
         self.freeze_factor = args.freeze_factor
         self.warmup_factor = args.warmup_factor
+        self.alpha = args.alpha
         self.grad_norm = args.grad_norm
         self.grad_scaling = args.grad_scaling
         self.loss_div = args.loss_div
@@ -118,7 +119,7 @@ class Trainer:
 
             cam_loss = self.criterion(spec_cam.view(-1, 3)[valid_mask.view(-1)] / self.loss_div, true_cam.view(-1, 3)[valid_mask.view(-1)] / self.loss_div)
 
-            loss = dist_loss + cam_loss
+            loss = dist_loss * self.get_dist_weight(epoch) + cam_loss
 
             print('| train Epoch[%d] [%d/%d]  Dist Loss %1.4f  Cam Loss %1.4f' % (epoch, i, n_batches, dist_loss.item(), cam_loss.item()))
 
@@ -508,7 +509,9 @@ class Trainer:
     def test(self, epoch, test_loader):
         self.model.eval()
 
-        if self.do_fusion:
+        if self.do_teach:
+            return self.vanilla_test(epoch, test_loader, torch.device('cuda'))
+        elif self.do_fusion:
             return self.fusion_test(epoch, test_loader, torch.device('cuda'))
         else:
             return self.vanilla_test(epoch, test_loader, torch.device('cuda'))
@@ -533,3 +536,12 @@ class Trainer:
 
         self.optimizer.param_groups[0]['lr'] = learn_rate
         self.optimizer.param_groups[1]['lr'] = learn_rate_bn
+
+
+    def get_dist_weight(self, epoch):
+        alphas = np.linspace(1.0 / 100.0, self.alpha, 10)
+
+        if epoch - 1 < 10:
+            return alphas[epoch - 1]
+        else:
+            return self.alpha
