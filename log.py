@@ -20,7 +20,10 @@ class Logger:
         self.do_track = args.do_track
         self.joint_space = args.joint_space
         self.save_record = args.save_record
-        self.train_record = None
+
+        record_path = os.path.join(self.save_path, 'train_record.pth')
+
+        self.train_record = torch.load(record_path) if args.resume and os.path.exists(record_path) else None
 
 
     def record(self, epoch, train_recs, test_recs, model):

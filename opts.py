@@ -22,6 +22,8 @@ parser.add_argument('-depth_only', action='store_true', help='only accepts depth
 parser.add_argument('-nexponent', action='store_true', help='whether to feed in the negative exponent of raw depth values')
 parser.add_argument('-partial_conv', action='store_true', help='whether to replace all convs in Resnet with partial convs')
 parser.add_argument('-to_depth', action='store_true', help='whether to convert raw depth to actual depth')
+parser.add_argument('-early_dist', action='store_true', help='whether to impose distillation loss on the third stage feature map')
+parser.add_argument('-sigmoid', action='store_true', help='whether to apply sigmoid function to the feature maps before norm is taken')
 
 # augmentation options
 parser.add_argument('-geometry', action='store_true', help='whether to perform geometry augmentation')

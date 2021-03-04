@@ -86,6 +86,13 @@ def create_pair(args):
     model = getattr(model_creator, args.model)(args, args.pretrain)
     state = None
 
+    if args.resume:
+        print('=> Loading checkpoint from ' + args.model_path)
+        checkpoint = torch.load(args.model_path)
+
+        model.load_state_dict(checkpoint['model'])
+        state = checkpoint['state']
+
     if args.n_cudas:
         cudnn.benchmark = True
         model = model.cuda() if args.n_cudas == 1 else nn.DataParallel(model, device_ids = range(args.n_cudas)).cuda()

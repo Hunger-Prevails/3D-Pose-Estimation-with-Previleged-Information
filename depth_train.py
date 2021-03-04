@@ -29,6 +29,7 @@ class Trainer:
         self.depth_only = args.depth_only
         self.do_fusion = args.do_fusion
         self.do_teach = args.do_teach
+        self.sigmoid = args.sigmoid
 
         if args.half_acc:
             self.copy_params = [param.clone().detach() for param in self.list_params]
@@ -86,6 +87,8 @@ class Trainer:
 
         for i, (color_image, depth_image, true_cam, valid_mask) in enumerate(data_loader):
 
+            torch.cuda.empty_cache()
+
             if self.n_cudas:
                 color_image = color_image.half().to(cuda_device) if self.half_acc else color_image.to(cuda_device)
                 depth_image = depth_image.half().to(cuda_device) if self.half_acc else depth_image.to(cuda_device)
@@ -105,7 +108,9 @@ class Trainer:
                 cam_feat = cam_feat.float()
                 last_feat = last_feat.float()
 
-            dist_loss = torch.linalg.norm((teach_last - last_feat).view(batch, -1), dim = -1).mean()
+            diff = (torch.sigmoid(teach_last) - torch.sigmoid(last_feat)) if self.sigmoid else (teach_last - last_feat)
+
+            dist_loss = torch.linalg.norm(diff.view(batch, -1), dim = -1).mean()
 
             heat_cam = utils.to_heatmap(cam_feat, self.depth, self.num_joints, side_out, side_out)
 

@@ -141,6 +141,7 @@ class ResNet(nn.Module):
         super(ResNet, self).__init__()
 
         self.do_teach = args.do_teach
+        self.early_dist = args.early_dist
 
         stride2 = int(np.minimum(np.maximum(np.log2(args.stride), 2), 3) - 1)
         stride3 = int(np.minimum(np.maximum(np.log2(args.stride), 3), 4) - 2)
@@ -217,12 +218,12 @@ class ResNet(nn.Module):
 
         x = self.fusion(x, y)
 
-        x = self.layer3(x)
-        x = self.layer4(x)
+        m = self.layer3(x)
+        x = self.layer4(m)
         z = self.regressor(x)
 
         if self.do_teach and self.training:
-            return z, x
+            return z, m if self.early_dist else x
         else:
             return z
 
