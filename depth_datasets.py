@@ -21,37 +21,61 @@ from depth_groups import by_person
 from augment_colour import random_color
 
 
-def get_data_loader(args, phase):
-    data_info = getattr(depth_groups, 'get_' + args.data_name + '_info')()
-
+def get_data_loader(args, phase, data_info):
     dataset = Dataset(data_info, phase, args)
 
     shuffle = args.shuffle if phase == 'train' else False
 
-    data_loader = data.DataLoader(dataset, args.batch_size, shuffle, num_workers = args.workers, pin_memory = True)
+    return data.DataLoader(dataset, args.batch_size, shuffle, num_workers = args.workers, pin_memory = True)
 
-    return data_loader, data_info
+
+def ntu_split(split, phase, sample):
+    return (sample['video'][:8] in split[phase]['configs']) and (sample['video'][8:12] in split[phase]['persons'])
+
+
+def pku_split(split, phase, sample):
+    return sample['video'] in split[phase]
+
+
+def enhance_ntu(image, nexponent):
+    image = image / (10.0 / 255.0)
+
+    veil = (0.1 <= image).astype(np.float)
+
+    dest = np.multiply(np.exp(-image), veil) if nexponent else (image / 3.0)
+
+    return dest.astype(np.float32)[np.newaxis, :, :]
+
+
+def enhance_pku(frame, nexponent):
+    image = frame / 10.0
+
+    veil = (0.5 <= image).astype(np.float)
+
+    dest = np.multiply(np.exp(-image), veil) if nexponent else (image / 3.0)
+
+    return dest.astype(np.float32)[np.newaxis, :, :]
 
 
 class Dataset(data.Dataset):
 
     def __init__(self, data_info, phase, args):
+        assert len(data_info.short_names) == args.num_joints
 
-        self.data_root_path = args.data_root_path
+        self.data_name = args.data_name
+        self.data_path = json.load(open('/globalwork/liu/data_path.json'))
 
         self.data_info = data_info
-        self.samples = self.get_samples(args, phase)
+        self.samples = self.get_samples(phase, locals()[args.data_name + '_split'])
 
-        with open(os.path.join(args.data_root_path, 'depth_cameras.pkl'), 'rb') as file:
-            self.depth_cams = pickle.load(file)
+        self.__dict__['init_' + args.data_name]()
 
         self.at_test = phase != 'train'
         self.side_in = args.side_in
 
-        assert len(data_info.short_names) == args.num_joints
-
         self.mean = [0.485, 0.456, 0.406]
         self.dev = [0.229, 0.224, 0.225]
+
         self.nexponent = args.nexponent
         self.colour = args.colour
         self.geometry = args.geometry
@@ -60,10 +84,45 @@ class Dataset(data.Dataset):
 
         self.transform = transforms.Compose([
             transforms.ToTensor(),
-            transforms.Normalize(mean=self.mean, std=self.dev)])
+            transforms.Normalize(mean = self.mean, std = self.dev)])
 
-    def get_samples(self, args, phase):
-        sample_files = glob.glob(os.path.join(args.data_root_path, 'final_samples', '*.pkl'))
+
+    def root(self):
+        return self.data_path['root_' + self.data_name]
+
+
+    def init_ntu(self):
+        with open(os.path.join(self.root(), 'depth_cameras.pkl'), 'rb') as file:
+            self.depth_cams = pickle.load(file)
+
+
+    def init_pku(self):
+        with open(os.path.join(self.root(), 'cameras.pkl'), 'rb') as file:
+            self.cameras = pickle.load(file)
+
+
+    def depth_cam_ntu(self, sample):
+        return self.depth_cams[sample['video'][:8]]
+
+
+    def depth_cam_pku(self, sample):
+        return self.cameras[sample['video'][5]]
+
+
+    def depth_image_ntu(self, sample):
+        seq_folder = os.path.join('nturgbd_depth_s' + sample['video'][1:4], 'nturgb+d_depth')
+
+        image_name = 'Depth-' + str(sample['frame'] + 1).zfill(8) + '.png'
+
+        return os.path.join(self.root(), seq_folder, sample['video'], image_name)
+
+
+    def depth_image_pku(self, sample):
+        return os.path.join(self.root(), 'DEPTH_IMAGE', sample['video'] + '.' + str(sample['frame']) + '.jpg')
+
+
+    def get_samples(self, phase, split_by):
+        sample_files = glob.glob(os.path.join(self.root(), 'final_samples', '*.pkl'))
 
         samples = []
 
@@ -71,10 +130,11 @@ class Dataset(data.Dataset):
             with open(sample_file, 'rb') as file:
                 samples += pickle.load(file)
 
-        with open(os.path.join(args.data_root_path, 'split.json')) as file:
+        with open(os.path.join(self.root(), 'split.json')) as file:
             split = json.load(file)
 
-        return [sample for sample in samples if by_person(split, phase, sample)]
+        return [sample for sample in samples if split_by(split, phase, sample)]
+
 
     def get_input_image(self, image_path, camera, bbox, do_flip, random_zoom):
         '''
@@ -121,14 +181,10 @@ class Dataset(data.Dataset):
 
         return image, new_cam
 
+
     def parse_sample(self, sample):
-        depth_cam = self.depth_cams[sample['video'][:8]]
-
-        seq_folder = os.path.join('nturgbd_depth_s' + sample['video'][1:4], 'nturgb+d_depth')
-
-        image_name = 'Depth-' + str(sample['frame'] + 1).zfill(8) + '.png'
-
-        depth_image = os.path.join(self.data_root_path, seq_folder, sample['video'], image_name)
+        depth_cam = self.__dict__['depth_cam_' + self.data_name](sample)
+        depth_image = self.__dict__['depth_image_' + self.data_name](sample)
 
         do_flip = (not self.at_test) and (np.random.rand() < 0.5)
 
@@ -144,7 +200,7 @@ class Dataset(data.Dataset):
         if self.to_depth:
             depth_image = utils.to_depth(depth_image, depth_cam)
 
-        depth_image = utils.enhance(depth_image, self.nexponent)
+        depth_image = locals()['enhance_' + self.data_name](depth_image, self.nexponent)
 
         world_coords = sample['skeleton']
         camera_coords = new_color_cam.world_to_camera(world_coords)
@@ -161,11 +217,14 @@ class Dataset(data.Dataset):
         else:
             return color_image, depth_image, camera_coords, valid
 
+
     def __getitem__(self, index):
         return self.parse_sample(self.samples[index])
 
+
     def __len__(self):
         return len(self.samples)
+
 
     def viz(self, args):
         cam_specs = np.load('./batch.npy')
@@ -178,7 +237,7 @@ class Dataset(data.Dataset):
 
             image_name = 'Depth-' + str(sample['frame'] + 1).zfill(8) + '.png'
 
-            depth_image = os.path.join(self.data_root_path, seq_folder, sample['video'], image_name)
+            depth_image = os.path.join(self.root(), seq_folder, sample['video'], image_name)
 
             depth_cam = self.depth_cams[sample['video'][:8]]
 

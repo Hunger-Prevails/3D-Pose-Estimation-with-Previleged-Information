@@ -22,16 +22,6 @@ def to_depth(image, depth_cam):
 	return image / np.sqrt(np.sum(unprojection ** 2, axis = -1) + 1)
 
 
-def enhance(image, nexponent):
-	image = image / (10.0 / 255.0)
-
-	veil = (0.1 <= image).astype(np.float)
-
-	dest = np.multiply(np.exp(-image), veil) if nexponent else (image / 3.0)
-
-	return dest.astype(np.float32)[np.newaxis, :, :]
-
-
 def to_bbox(det):
     return np.array([det.x, det.y, det.w, det.h])
 

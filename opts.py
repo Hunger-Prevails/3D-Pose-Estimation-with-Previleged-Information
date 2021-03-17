@@ -37,8 +37,6 @@ parser.add_argument('-teacher_path', help='Path to a checkpoint of the teacher m
 parser.add_argument('-host_path', help='Path to a checkpoint of the depth-only host model')
 parser.add_argument('-suffix', required=True, help='Model suffix')
 parser.add_argument('-data_name', required=True, help='name of dataset')
-parser.add_argument('-data_root_path', required=True, help='Root path to dataset')
-parser.add_argument('-data_down_path', required=True, help='Root path to crop images of the dataset')
 parser.add_argument('-occ_path', help='Root path to occluders')
 parser.add_argument('-save_path', required=True, help='Path to save train record')
 parser.add_argument('-criterion', required=True, help='criterion function for estimation loss')

@@ -12,25 +12,6 @@ import cameralib
 import multiprocessing
 import matplotlib.pyplot as plt
 
-from utils import JointInfo
-from utils import PoseSample
-
-
-def by_sequence(phase, sample_file):
-
-	partitions = dict(
-		train = ['S001', 'S002', 'S003', 'S004', 'S005', 'S006', 'S007', 'S008', 'S009', 'S010', 'S011'],
-		valid = ['S012', 'S013', 'S014'],
-		test = ['S015', 'S016', 'S017']
-	)
-	cam_id = os.path.basename(sample_file).split('.')[0]
-
-	return cam_id[:4] in partitions[phase]
-
-
-def by_person(split, phase, sample):
-	return (sample['video'][:8] in split[phase]['configs']) and (sample['video'][8:12] in split[phase]['persons'])
-
 
 def make_sample(sample, cameras, image, args):
 	'''
@@ -228,24 +209,3 @@ def get_pku_group(args):
 
 	with open(sample_file.replace('midway', 'final'), 'wb') as file:
 		pickle.dump(final_samples, file)
-
-def get_ntu_info():
-	from joint_settings import h36m_short_names as short_names
-	from joint_settings import h36m_parent as parent
-	from joint_settings import h36m_mirror as mirror
-	from joint_settings import h36m_base_joint as base_joint
-
-	mapper = dict(zip(short_names, range(len(short_names))))
-
-	map_mirror = [mapper[mirror[name]] for name in short_names if name in mirror]
-	map_parent = [mapper[parent[name]] for name in short_names if name in parent]
-
-	_mirror = np.arange(len(short_names))
-	_parent = np.arange(len(short_names))
-
-	_mirror[np.array([name in mirror for name in short_names])] = np.array(map_mirror)
-	_parent[np.array([name in parent for name in short_names])] = np.array(map_parent)
-
-	data_info = JointInfo(short_names, _parent, _mirror, mapper[base_joint])
-
-	return data_info

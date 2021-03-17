@@ -5,9 +5,32 @@ import torch.backends.cudnn as cudnn
 import importlib
 
 from opts import args
+from utils import JointInfo
 from depth_datasets import get_data_loader
 from log import Logger
 from depth_train import Trainer
+
+
+def get_info():
+    from joint_settings import h36m_short_names as short_names
+    from joint_settings import h36m_parent as parent
+    from joint_settings import h36m_mirror as mirror
+    from joint_settings import h36m_base_joint as base_joint
+
+    mapper = dict(zip(short_names, range(len(short_names))))
+
+    map_mirror = [mapper[mirror[name]] for name in short_names if name in mirror]
+    map_parent = [mapper[parent[name]] for name in short_names if name in parent]
+
+    _mirror = np.arange(len(short_names))
+    _parent = np.arange(len(short_names))
+
+    _mirror[np.array([name in mirror for name in short_names])] = np.array(map_mirror)
+    _parent[np.array([name in parent for name in short_names])] = np.array(map_parent)
+
+    data_info = JointInfo(short_names, _parent, _mirror, mapper[base_joint])
+
+    return data_info
 
 
 def create_model(args):
@@ -100,14 +123,16 @@ def main():
         model, state = create_model(args)
     print('=> Models are created and filled')
 
-    if args.test_only:
-        test_loader, data_info = get_data_loader(args, 'test')
-    elif args.val_only:
-        test_loader, data_info = get_data_loader(args, 'valid')
-    else:
-        test_loader, data_info = get_data_loader(args, 'valid')
+    data_info = get_info()
 
-        data_loader, data_info = get_data_loader(args, 'train')
+    if args.test_only:
+        test_loader = get_data_loader(args, 'test', data_info)
+    elif args.val_only:
+        test_loader = get_data_loader(args, 'valid', data_info)
+    else:
+        test_loader = get_data_loader(args, 'valid', data_info)
+
+        data_loader = get_data_loader(args, 'train', data_info)
 
     print('=> Dataloaders are ready')
 
