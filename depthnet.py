@@ -186,14 +186,18 @@ class ResNet(nn.Module):
 def build_resnet(block, layers, args, pretrain):
     if pretrain:
         model = ResNet(block, layers, args)
-        toy_dict = torch.load(args.model_path)
+        toy_dict = torch.load(args.host_path)['model'] if args.depth_host else torch.load(args.model_path)
         model_dict = model.state_dict()
-        
+
         keys = list(toy_dict.keys())
 
         if args.depth_only:
             tensor = toy_dict['conv1.weight'].data
             toy_dict['conv1.weight'].data = torch.clone(tensor[:, :1])
+
+        if args.depth_host:
+            tensor = toy_dict['conv1.weight'].data
+            toy_dict['conv1.weight'].data = (tensor / 3).repeat(1, 3, 1, 1)
 
         for key in keys:
             if key not in model_dict:

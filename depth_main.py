@@ -11,10 +11,6 @@ from depth_train import Trainer
 
 
 def create_model(args):
-    assert not (args.resume and args.pretrain)
-    assert not (args.do_fusion and args.depth_only)
-    assert (args.depth_host <= args.do_fusion)
-
     model_creator = 'fusion' if args.do_fusion else 'depth'
 
     if args.partial_conv:
@@ -60,13 +56,6 @@ def create_model(args):
 
 
 def create_pair(args):
-    assert not (args.resume and args.pretrain)
-    assert not (args.do_fusion and args.depth_only)
-    assert not args.depth_host
-    assert not args.depth_only
-    assert not args.test_only
-    assert not args.val_only
-
     teacher_creator = 'fusion' if args.do_fusion else 'depth'
 
     if args.partial_conv:
@@ -101,11 +90,15 @@ def create_pair(args):
     return model, teacher, state
 
 def main():
+    assert not (args.resume and args.pretrain)
+    assert not (args.do_fusion and args.depth_only)
+    assert not (args.depth_host and args.depth_only)
+
     if args.do_teach:
         model, teacher, state = create_pair(args)
     else:
         model, state = create_model(args)
-    print('=> Model and criterion are ready')
+    print('=> Models are created and filled')
 
     if args.test_only:
         test_loader, data_info = get_data_loader(args, 'test')

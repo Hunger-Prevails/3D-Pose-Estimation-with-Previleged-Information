@@ -1,4 +1,5 @@
 import os
+import cv2
 import queue
 import torch
 import imageio
@@ -52,28 +53,26 @@ def transfer_bbox(bbox, color_cam, depth_cam):
 	return np.concatenate([new_tl, new_br - new_tl])
 
 
-def prefetch(video_path, buffer_size):
+def prefetch(video_path):
+	cap = cv2.VideoCapture(video_path)
 
-	q = queue.Queue(buffer_size)
-	end_mark = object()
+	while(cap.isOpened()):
+		ret, frame = cap.read()
+		if ret:
+			yield cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+		else:
+			break
 
-	def producer():
-		with imageio.get_reader(video_path, 'ffmpeg') as reader:
-			for elem in reader:
-				q.put(elem)
-			q.put(end_mark)
 
-	producer = threading.Thread(target = producer)
-	producer.start()
+def depth_prefetch(video_path):
+	cap = cv2.VideoCapture(video_path)
 
-	try:
-		while True:
-			elem = q.get()
-			if elem is end_mark:
-				return
-			yield elem
-	finally:
-		producer.join()
+	while(cap.isOpened()):
+		ret, frame = cap.read()
+		if ret:
+			yield cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+		else:
+			break
 
 
 def groupby(items, key):

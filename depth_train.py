@@ -57,6 +57,7 @@ class Trainer:
         self.freeze_factor = args.freeze_factor
         self.warmup_factor = args.warmup_factor
         self.alpha = args.alpha
+        self.alpha_warmup = args.alpha_warmup
         self.grad_norm = args.grad_norm
         self.grad_scaling = args.grad_scaling
         self.loss_div = args.loss_div
@@ -544,7 +545,7 @@ class Trainer:
 
 
     def get_dist_weight(self, epoch):
-        alphas = np.linspace(1.0 / 100.0, self.alpha, 10)
+        alphas = np.linspace(self.alpha_warmup, self.alpha, 10)
 
         if epoch - 1 < 10:
             return alphas[epoch - 1]
