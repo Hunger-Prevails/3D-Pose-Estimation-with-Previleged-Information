@@ -5,7 +5,6 @@ import torch.backends.cudnn as cudnn
 
 from opts import args
 from datasets import get_data_loader
-from comp_datasets import get_comp_loader
 from log import Logger
 from train import Trainer
 
@@ -85,8 +84,6 @@ def main():
 
         data_loader, data_info = get_data_loader(args, 'train')
 
-        comp_loader = get_comp_loader(args, 'train', data_info) if args.do_company else None
-
     print('=> Dataloaders are ready')
 
     logger = Logger(args, state)
@@ -103,7 +100,7 @@ def main():
         print('=> Start training')
         
         for epoch in xrange(start_epoch, args.n_epochs + 1):
-            train_rec = trainer.train(epoch, data_loader, comp_loader)
+            train_rec = trainer.train(epoch, data_loader)
             test_rec = trainer.test(epoch, test_loader)
 
             logger.record(epoch, train_rec, test_rec, model) 
