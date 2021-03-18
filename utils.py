@@ -43,24 +43,32 @@ def transfer_bbox(bbox, color_cam, depth_cam):
 	return np.concatenate([new_tl, new_br - new_tl])
 
 
-def prefetch(video_path):
+def prefetch(video_path, hflip = False):
 	cap = cv2.VideoCapture(video_path)
 
 	while(cap.isOpened()):
 		ret, frame = cap.read()
 		if ret:
-			yield cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+			frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+			if hflip:
+				yield np.ascontiguousarray(frame[:, ::-1])
+			else:
+				yield frame
 		else:
 			break
 
 
-def depth_prefetch(video_path):
+def depth_prefetch(video_path, hflip = False):
 	cap = cv2.VideoCapture(video_path)
 
 	while(cap.isOpened()):
 		ret, frame = cap.read()
 		if ret:
-			yield cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+			frame = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+			if hflip:
+				yield np.ascontiguousarray(frame[:, ::-1])
+			else:
+				yield frame
 		else:
 			break
 

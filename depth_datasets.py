@@ -47,8 +47,8 @@ def enhance_ntu(image, nexponent):
     return dest.astype(np.float32)[np.newaxis, :, :]
 
 
-def enhance_pku(frame, nexponent):
-    image = frame / 10.0
+def enhance_pku(image, nexponent):
+    image = image / (10.0 / 255.0)
 
     veil = (0.5 <= image).astype(np.float)
 
@@ -118,10 +118,10 @@ class Dataset(data.Dataset):
 
 
     def depth_image_pku(self, sample):
-        return os.path.join(self.root(), 'DEPTH_IMAGE', sample['video'] + '.' + str(sample['frame']) + '.jpg')
+        return os.path.join(self.root(), 'DEPTH_IMAGE', sample['video'] + '.' + str(sample['frame']) + '.png')
 
 
-    def get_samples(self, phase, split_by):
+    def get_ntu_samples(self, phase, split_by):
         sample_files = glob.glob(os.path.join(self.root(), 'final_samples', '*.pkl'))
 
         samples = []
@@ -129,6 +129,18 @@ class Dataset(data.Dataset):
         for sample_file in sample_files:
             with open(sample_file, 'rb') as file:
                 samples += pickle.load(file)
+
+        with open(os.path.join(self.root(), 'split.json')) as file:
+            split = json.load(file)
+
+        return [sample for sample in samples if split_by(split, phase, sample)]
+
+
+    def get_pku_samples(self, phase, split_by):
+        sample_file = os.path.join(self.root(), 'final_samples.pkl')
+
+        with open(sample_file, 'rb') as file:
+            samples = pickle.load(file)
 
         with open(os.path.join(self.root(), 'split.json')) as file:
             split = json.load(file)

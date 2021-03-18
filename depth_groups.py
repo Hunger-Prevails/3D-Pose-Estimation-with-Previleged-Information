@@ -167,8 +167,8 @@ def get_pku_group(args):
 		video_path = os.path.join(args.data_root_path, 'RGB_VIDEO', video_id + '.avi')
 		depth_path = os.path.join(args.data_root_path, 'DEPTH_VIDEO', video_id + '-depth.avi')
 
-		video_loader = utils.prefetch(video_path)
-		depth_loader = utils.depth_prefetch(depth_path)
+		video_loader = utils.prefetch(video_path, True)
+		depth_loader = utils.depth_prefetch(depth_path, True)
 
 		down_path = os.path.join(args.data_down_path, video_id)
 
@@ -181,31 +181,37 @@ def get_pku_group(args):
 
 		for frame, (image, depth_image) in enumerate(zip(video_loader, depth_loader)):
 
-			if frame in samples_by_frame:
-				print('\t=> handles frame[', frame, ']')
+			if frame not in samples_by_frame:
+				continue
 
-				new_depth_path = os.path.join(args.data_root_path, 'DEPTH_IMAGE', video_id + '.' + str(frame) + '.jpg')
+			print('\t=> handles frame[', frame, ']')
 
-				if not os.path.exists(new_depth_path):
-					plt.imsave(new_depth_path, depth_image)
+			new_depth_path = os.path.join(args.data_root_path, 'DEPTH_IMAGE', video_id + '.' + str(frame) + '.png')
 
-				samples_cur_frame = samples_by_frame[frame]
+			flag = False
 
-				det_bboxes = detector.detect(image)
+			samples_cur_frame = samples_by_frame[frame]
 
-				iou_matrix = np.array([[boxlib.iou(sample['bbox'], bbox) for bbox in det_bboxes] for sample in samples_cur_frame])
+			det_bboxes = detector.detect(image)
 
-				sample_indices, det_indices = scipy.optimize.linear_sum_assignment(-iou_matrix)
+			iou_matrix = np.array([[boxlib.iou(sample['bbox'], bbox) for bbox in det_bboxes] for sample in samples_cur_frame])
 
-				for i_sample, i_det in zip(sample_indices, det_indices):
+			sample_indices, det_indices = scipy.optimize.linear_sum_assignment(-iou_matrix)
 
-					cur_sample = samples_cur_frame[i_sample]
+			for i_sample, i_det in zip(sample_indices, det_indices):
 
-					if (0.5 <= iou_matrix[i_sample, i_det]):
+				cur_sample = samples_cur_frame[i_sample]
 
-						cur_sample['bbox'] = det_bboxes[i_det]
+				if (0.5 <= iou_matrix[i_sample, i_det]):
 
-						final_samples.append(make_sample(cur_sample, cur_cams, image, args))
+					cur_sample['bbox'] = det_bboxes[i_det]
+
+					final_samples.append(make_sample(cur_sample, cur_cams, image, args))
+
+					flag = True
+
+			if flag and not os.path.exists(new_depth_path):
+				cv2.imwrite(new_depth_path, depth_image)
 
 	with open(sample_file.replace('midway', 'final'), 'wb') as file:
 		pickle.dump(final_samples, file)
