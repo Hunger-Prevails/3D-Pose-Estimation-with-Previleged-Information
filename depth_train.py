@@ -5,7 +5,7 @@ import torch.optim as optim
 import utils
 
 from torch.autograd import Variable
-
+from depth_datasets import get_data_loader
 
 def wrap_by_name(names, params):
     param_convs = [param for name, param in zip(names, params) if 'bn' in name]
@@ -29,7 +29,13 @@ class Trainer:
         self.depth_only = args.depth_only
         self.do_fusion = args.do_fusion
         self.do_teach = args.do_teach
+        self.semi_teach = args.semi_teach
         self.sigmoid = args.sigmoid
+
+        if args.semi_teach:
+            args.data_name = 'pku'
+            self.semi_loader = get_data_loader(args, 'train', data_info)
+            self.semi_worker = iter(self.semi_loader)
 
         if args.half_acc:
             self.copy_params = [param.clone().detach() for param in self.list_params]
@@ -77,18 +83,48 @@ class Trainer:
         self.teacher = teacher.half() if self.half_acc else teacher
 
 
+    def semi_train(self, cuda_device):
+        try:
+            color_image, depth_image, true_cam, valid_mask = next(self.semi_worker)
+        except:
+            self.semi_worker = iter(self.semi_loader)
+
+            color_image, depth_image, true_cam, valid_mask = next(self.semi_worker)
+
+        if self.n_cudas:
+            color_image = color_image.half().to(cuda_device) if self.half_acc else color_image.to(cuda_device)
+            depth_image = depth_image.half().to(cuda_device) if self.half_acc else depth_image.to(cuda_device)
+
+        semi_batch = true_cam.size(0)
+
+        with torch.no_grad():
+            teach_cam, teach_last = self.teacher(color_image, depth_image)
+            if self.half_acc:
+                teach_last = teach_last.float()
+
+        cam_feat, last_feat = self.model(color_image)
+        if self.half_acc:
+            last_feat = last_feat.float()
+
+        diff = (torch.sigmoid(teach_last) - torch.sigmoid(last_feat)) if self.sigmoid else (teach_last - last_feat)
+
+        dist_loss = torch.linalg.norm(diff.view(semi_batch, -1), dim = -1).mean()
+
+        return semi_batch, dist_loss
+
+
     def distill_train(self, epoch, data_loader, cuda_device):
         n_batches = len(data_loader)
 
-        dist_loss_sum = 0.0
         cam_loss_sum = 0.0
-        total = 0
+        dist_loss_sum = 0.0
+
+        cam_loss_samples = 0
+        dist_loss_samples = 0
 
         side_out = (self.side_in - 1) // self.stride + 1
 
         for i, (color_image, depth_image, true_cam, valid_mask) in enumerate(data_loader):
-
-            torch.cuda.empty_cache()
 
             if self.n_cudas:
                 color_image = color_image.half().to(cuda_device) if self.half_acc else color_image.to(cuda_device)
@@ -97,7 +133,7 @@ class Trainer:
                 true_cam = true_cam.to(cuda_device)
                 valid_mask = valid_mask.to(cuda_device)
 
-            batch = true_cam.size(0)
+            full_batch = true_cam.size(0)
 
             with torch.no_grad():
                 teach_cam, teach_last = self.teacher(color_image, depth_image)
@@ -111,7 +147,7 @@ class Trainer:
 
             diff = (torch.sigmoid(teach_last) - torch.sigmoid(last_feat)) if self.sigmoid else (teach_last - last_feat)
 
-            dist_loss = torch.linalg.norm(diff.view(batch, -1), dim = -1).mean()
+            dist_loss = torch.linalg.norm(diff.view(full_batch, -1), dim = -1).mean()
 
             heat_cam = utils.to_heatmap(cam_feat, self.depth, self.num_joints, side_out, side_out)
 
@@ -125,13 +161,29 @@ class Trainer:
 
             cam_loss = self.criterion(spec_cam.view(-1, 3)[valid_mask.view(-1)] / self.loss_div, true_cam.view(-1, 3)[valid_mask.view(-1)] / self.loss_div)
 
+            cam_loss_sum += cam_loss.item() * full_batch
+            cam_loss_samples += full_batch
+
+            dist_loss_sum += dist_loss.item() * full_batch
+            dist_loss_samples += full_batch
+
+            message = '[=] train Epoch[{0}] Batch[{1}|{2}] '.format(epoch, i, n_batches)
+            message += ' Cam Loss {:.4f} '.format(cam_loss.item())
+            message += ' Dist Loss {:.4f} '.format(dist_loss.item())
+
             loss = dist_loss * self.get_dist_weight(epoch) + cam_loss
 
-            print('| train Epoch[%d] [%d/%d]  Dist Loss %1.4f  Cam Loss %1.4f' % (epoch, i, n_batches, dist_loss.item(), cam_loss.item()))
+            if self.semi_teach:
+                semi_batch, semi_dist_loss = self.semi_train(cuda_device)
 
-            dist_loss_sum += dist_loss.item() * batch
-            cam_loss_sum += cam_loss.item() * batch
-            total += batch
+                dist_loss_sum += semi_dist_loss.item() * semi_batch
+                dist_loss_samples += semi_batch
+
+                message += ' Semi Loss {:.4f}'.format(semi_dist_loss.item())
+
+                loss += semi_dist_loss * self.get_dist_weight(epoch)
+
+            print(message)
 
             if self.half_acc:
                 loss *= self.grad_scaling
@@ -178,10 +230,10 @@ class Trainer:
                 nn.utils.clip_grad_norm_(self.list_params, self.grad_norm)
                 self.optimizer.step()
 
-        dist_loss_sum /= total
-        cam_loss_sum /= total
+        cam_loss_sum /= cam_loss_samples
+        dist_loss_sum /= dist_loss_samples
 
-        print('\n=> train Epoch[%d]  Dist Loss: %1.4f\n  Cam Loss: %1.4f\n' % (epoch, dist_loss_sum, cam_loss_sum))
+        print('\n=> train Epoch[%d]  Cam Loss: %1.4f  Dist Loss: %1.4f\n\n' % (epoch, cam_loss_sum, dist_loss_sum))
 
         return dict(dist_train_loss = dist_loss_sum, cam_train_loss = cam_loss_sum)
 

@@ -17,7 +17,6 @@ import torch.utils.data as data
 
 from torchvision import datasets
 from torchvision import transforms
-from depth_groups import by_person
 from augment_colour import random_color
 
 
@@ -66,9 +65,9 @@ class Dataset(data.Dataset):
         self.data_path = json.load(open('/globalwork/liu/data_path.json'))
 
         self.data_info = data_info
-        self.samples = self.get_samples(phase, locals()[args.data_name + '_split'])
+        self.samples = getattr(self, 'get_' + args.data_name + '_samples')(phase, globals()[args.data_name + '_split'])
 
-        self.__dict__['init_' + args.data_name]()
+        getattr(self, 'init_' + args.data_name)()
 
         self.at_test = phase != 'train'
         self.side_in = args.side_in
@@ -195,8 +194,8 @@ class Dataset(data.Dataset):
 
 
     def parse_sample(self, sample):
-        depth_cam = self.__dict__['depth_cam_' + self.data_name](sample)
-        depth_image = self.__dict__['depth_image_' + self.data_name](sample)
+        depth_cam = getattr(self, 'depth_cam_' + self.data_name)(sample)
+        depth_image = getattr(self, 'depth_image_' + self.data_name)(sample)
 
         do_flip = (not self.at_test) and (np.random.rand() < 0.5)
 
@@ -212,7 +211,7 @@ class Dataset(data.Dataset):
         if self.to_depth:
             depth_image = utils.to_depth(depth_image, depth_cam)
 
-        depth_image = locals()['enhance_' + self.data_name](depth_image, self.nexponent)
+        depth_image = globals()['enhance_' + self.data_name](depth_image, self.nexponent)
 
         world_coords = sample['skeleton']
         camera_coords = new_color_cam.world_to_camera(world_coords)
@@ -223,9 +222,9 @@ class Dataset(data.Dataset):
             valid = valid[self.data_info.mirror]
 
         if self.at_test:
-            color_br = sample['camera'].R @ new_color_cam.R.T
+            back_rotate = sample['camera'].R @ new_color_cam.R.T
 
-            return color_image, depth_image, camera_coords, valid, color_br
+            return color_image, depth_image, camera_coords, valid, back_rotate
         else:
             return color_image, depth_image, camera_coords, valid
 

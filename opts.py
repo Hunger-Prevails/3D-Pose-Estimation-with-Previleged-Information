@@ -17,6 +17,7 @@ parser.add_argument('-joint_space', action='store_true', help='whether to allow 
 parser.add_argument('-do_track', action='store_true', help='whether to track cam coords via least square optim')
 parser.add_argument('-do_fusion', action='store_true', help='whether to accept both color and depth input')
 parser.add_argument('-do_teach', action='store_true', help='whether to force a student to mimic its teacher')
+parser.add_argument('-semi_teach', action='store_true', help='whether to force a student to mimic its teacher on additional unlabelled image pairs')
 parser.add_argument('-depth_only', action='store_true', help='only accepts depth input')
 parser.add_argument('-nexponent', action='store_true', help='whether to feed in the negative exponent of raw depth values')
 parser.add_argument('-partial_conv', action='store_true', help='whether to replace all convs in Resnet with partial convs')

@@ -11,8 +11,6 @@ python3 depth_main.py \
 				-model_path /home/liu/camera_pose/models/resnet50.pth \
 				-suffix debug \
 				-data_name ntu \
-				-data_root_path /globalwork/data/NTU_RGBD \
-				-data_down_path /globalwork/liu/ntu_down \
 				-save_path /globalwork/liu/ntu_train \
 				-criterion SmoothL1 \
 				-num_joints 17 \
