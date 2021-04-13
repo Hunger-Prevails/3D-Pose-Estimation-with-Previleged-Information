@@ -15,7 +15,7 @@ class Logger:
         if not os.path.exists(self.save_path):
             os.mkdir(self.save_path)
         
-        assert args.save_record != args.test_only or args.val_only
+        assert args.save_record != (args.test_only or args.val_only)
 
         self.do_track = args.do_track
         self.joint_space = args.joint_space

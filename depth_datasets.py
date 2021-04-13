@@ -76,8 +76,8 @@ class Dataset(data.Dataset):
         self.dev = [0.229, 0.224, 0.225]
 
         self.nexponent = args.nexponent
-        self.colour = args.colour
-        self.geometry = args.geometry
+        self.colour = args.colour and self.at_test
+        self.geometry = args.geometry and self.at_test
         self.random_zoom = args.random_zoom
         self.to_depth = args.to_depth
 
@@ -181,7 +181,7 @@ class Dataset(data.Dataset):
         new_cam.zoom(self.side_in / far_dist)
         new_cam.center_principal_point((self.side_in, self.side_in))
 
-        if (not self.at_test) and self.geometry:
+        if self.geometry:
             new_cam.zoom(random_zoom)
 
         if do_flip:

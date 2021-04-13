@@ -54,7 +54,7 @@ def create_model(args):
 
         best = torch.load(os.path.join(save_path, 'best.pth'))
         best = best['best'];
-        
+
         checkpoint = os.path.join(save_path, 'model_%d.pth' % best)
         checkpoint = torch.load(checkpoint)['model']
 
