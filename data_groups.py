@@ -22,177 +22,95 @@ from utils import JointInfo
 from utils import PoseSample
 
 
-def get_cameras(json_file, cam_names):
+def detect_bbox(image, rect, detector):
+	det_bboxes = detector.detect(image)
+
+	ious = np.array([boxlib.iou(rect, bbox) for bbox in det_bboxes])
+
+	if np.all(ious < 0.5):
+		return None
+
+	return det_bboxes[np.argmax(ious)]
+
+
+def make_sample(sample, camera, image, args):
+	'''
+	Args:
+		sample: dict(skeleton = body_pose, valid = valid, image = new_path, bbox = bbox)
+	'''
+	box_center = boxlib.center(sample['bbox'])
+
+	sine = np.sin(np.pi / 6)
+	cosine = np.cos(np.pi / 6)
+
+	expand_shape = np.array([[cosine, sine], [sine, cosine]]) @ sample['bbox'][2:, np.newaxis]
+	expand_side = np.max(expand_shape)
+
+	scale_factor = min(args.side_in / np.max(sample['bbox'][2:]) / args.random_zoom, 1.0)
+
+	dest_side = int(np.round(expand_side * scale_factor))
+
+	new_cam = copy.deepcopy(camera)
+	new_cam.shift_to_center(box_center, (expand_side, expand_side))
+	new_cam.scale_output(scale_factor)
+
+	new_bbox = cameralib.reproject_points(sample['bbox'][None, :2], camera, new_cam)[0]
+
+	new_bbox = np.concatenate([new_bbox, sample['bbox'][2:] * scale_factor])
+
+	if not os.path.exists(sample['image']):
+
+		new_image = cameralib.reproject_image(image, camera, new_cam, (dest_side, dest_side))
+
+		plt.imsave(sample['image'], new_image)
+
+	sample['bbox'] = new_bbox
+	sample['camera'] = new_cam
+
+	return sample
+
+
+def get_cmu_cameras(json_file, cam_names):
 
 	calibration = json.load(open(json_file))
 
 	cameras = [cam for cam in calibration['cameras'] if cam['panel'] == 0]
 
 	return dict(
-			[
-				(
-					cam['name'],
-					cameralib.Camera(
-							- np.array(cam['R']).T @ np.array(cam['t']),
-							np.array(cam['R']),
-							np.array(cam['K']),
-							np.array(cam['distCoef']),
-							(0, -1, 0)
-					)
-				) for cam in cameras if cam['name'] in cam_names
-			]
-		)
-
-
-def make_sample(paths, annos, args):
-	'''
-	params
-		image_coord: (19 x 3) joint coords in image space with confidence scores
-		body_pose: (19 x 3) joint coords in world space
-	returns
-		pose sample with path to down-scaled image and corresponding box/image_coord
-	'''
-	image_path, new_path = paths
-	image_coord, body_pose, camera = annos
-
-	border = np.array([1920, 1080])
-
-	cond1 = np.all(0 <= image_coord[:, :2], axis = 1)
-	cond2 = np.all(image_coord[:, :2] < border, axis = 1)
-
-	cond3 = cond1 & cond2 & (image_coord[:, 2] != -1)
-
-	valid = (args.thresh_confid <= image_coord[:, 2]) & cond3
-
-	if np.sum(valid) < args.num_valid:
-		return None
-
-	mass_center = np.array([np.mean(body_pose[valid, 0]), np.mean(body_pose[valid, 2])])
-	entry_center = np.array([30.35, -254.3])
-
-	if np.linalg.norm(mass_center - entry_center) <= 80:
-		return None
-
-	bbox = coord_to_box(image_coord[cond3, :2], args.box_margin, border)
-
-	expand_side = np.sum((bbox[2:] / args.random_zoom) ** 2) ** 0.5
-
-	box_center = bbox[:2] + bbox[2:] / 2
-
-	scale_factor = min(args.side_in / np.max(bbox[2:]) / args.random_zoom, 1.0)
-
-	dest_side = int(np.round(expand_side * scale_factor))
-
-	new_camera = copy.deepcopy(camera)
-	new_camera.shift_to_center(box_center, (expand_side, expand_side))
-	new_camera.scale_output(scale_factor)
-
-	new_bbox = cameralib.reproject_points(bbox[None, :2], camera, new_camera)[0]
-
-	new_bbox = np.concatenate((new_bbox, bbox[2:] * scale_factor))
-
-	if not os.path.exists(new_path):
-
-		image = jpeg4py.JPEG(image_path).decode()
-
-		new_image = cameralib.reproject_image(image, camera, new_camera, (dest_side, dest_side))
-
-		cv2.imwrite(new_path, new_image[:, :, ::-1])
-
-	return PoseSample(new_path, body_pose, valid, new_bbox, new_camera)
-
-
-def coord_to_box(valid_coord, box_margin, border):
-	'''
-	params
-		image_coord: (k x 3) valid joint coords in image space
-	returns
-		image_box: (4,) pseudo bounding box of the person
-	'''
-	x_min = np.amin(valid_coord[:, 0])
-	x_max = np.amax(valid_coord[:, 0])
-	y_min = np.amin(valid_coord[:, 1])
-	y_max = np.amax(valid_coord[:, 1])
-
-	center = np.array([(x_min + x_max) / 2, (y_min + y_max) / 2])
-	shape = np.array([x_max - x_min, y_max - y_min]) / box_margin
-
-	begin = np.maximum(center - shape / 2, np.zeros(2))
-	end = np.minimum(center + shape / 2, border)
-
-	return np.hstack([begin, end - begin])
+		[
+			(
+				cam['name'],
+				cameralib.Camera(
+						- np.array(cam['R']).T @ np.array(cam['t']),
+						np.array(cam['R']),
+						np.array(cam['K']),
+						np.array(cam['distCoef']),
+						(0, -1, 0)
+				)
+			) for cam in cameras if cam['name'] in cam_names
+		]
+	)
 
 
 def get_cmu_group(phase, args):
 
 	assert os.path.isdir(args.data_down_path)
-	
-	from joint_settings import cmu_short_names as short_names
-	from joint_settings import cmu_parent as parent
-	from joint_settings import cmu_mirror as mirror
-	from joint_settings import cmu_base_joint as base_joint
-
-	mapper = dict(zip(short_names, range(len(short_names))))
-	
-	map_mirror = [mapper[mirror[name]] for name in short_names if name in mirror]
-	map_parent = [mapper[parent[name]] for name in short_names if name in parent]
-
-	_mirror = np.arange(len(short_names))
-	_parent = np.arange(len(short_names))
-
-	_mirror[np.array([name in mirror for name in short_names])] = np.array(map_mirror)
-	_parent[np.array([name in parent for name in short_names])] = np.array(map_parent)
-
-	data_info = JointInfo(short_names, _parent, _mirror, mapper[base_joint])
 
 	sequences = dict(
 		train = [
-			'170221_haggling_b1',
-			'170221_haggling_b2',
-			'170221_haggling_b3',
-			'170221_haggling_m1',
-			'170221_haggling_m2',
-			'170221_haggling_m3',
-			'170224_haggling_a2',
-			'170224_haggling_a3',
-			'170224_haggling_b1',
-			'170224_haggling_b2',
-			'170224_haggling_b3',
-			'170228_haggling_a1',
-			'170228_haggling_a2',
-			'170228_haggling_a3',
-			'170228_haggling_b1',
-			'170228_haggling_b2',
-			'170228_haggling_b3',
-			'170404_haggling_a1',
-			'170404_haggling_a2',
-			'170404_haggling_a3',
-			'170404_haggling_b1',
-			'170404_haggling_b2',
-			'170404_haggling_b3',
-			'170407_haggling_a1',
-			'170407_haggling_a2',
-			'170407_haggling_a3',
-			'170407_haggling_b1',
-			'170407_haggling_b2',
-			'170407_haggling_b3',
 			'171026_pose1',
 			'171026_pose2',
-			'171026_pose3',
 			'171204_pose1',
 			'171204_pose2',
-			'171204_pose3',
 			'171204_pose4',
-			'171204_pose5',
-			'171204_pose6'
+			'171204_pose5'
 		],
 		valid = [
-			'160224_haggling1',
-			'160226_haggling1'
+			'171204_pose3',
+			'171204_pose6'
 		],
 		test = [
-			'160422_haggling1',
-			'161202_haggling1'
+			'171026_pose3'
 		]
 	)
 	frame_step = dict(
@@ -200,18 +118,13 @@ def get_cmu_group(phase, args):
 		valid = 10,
 		test = 50
 	)
-	processes = []
+	samples = []
 
-	pool = multiprocessing.Pool(args.num_processes)
+	time_window = json.load(open(os.path.join(args.data_root_path, 'time_window.json')))
 
 	for sequence in sequences[phase]:
 
 		root_seq = os.path.join(args.data_root_path, sequence)
-
-		try:
-			assert os.path.exists(root_seq)
-		except:
-			root_seq = root_seq.replace('cmu', 'new')
 
 		root_image = os.path.join(root_seq, 'hdImgs')
 
@@ -222,58 +135,38 @@ def get_cmu_group(phase, args):
 		cam_names = [cam_name for cam_name in cam_names if os.path.isdir(os.path.join(root_image, cam_name))]
 
 		cam_folders = [os.path.join(root_image, cam_name) for cam_name in cam_names]
-
-		cam_files = [os.path.join(root_image, 'image_coord_' + cam_name + '.json') for cam_name in cam_names]
-		cam_files = [json.load(open(file)) for file in cam_files]
+		cam_folders = dict(zip(cam_names, cam_folders))
 
 		down_path = [os.path.join(args.data_down_path, sequence + '.' + cam_name) for cam_name in cam_names]
-
-		start_frame = cam_files[0]['start_frame']
-		end_frame = cam_files[0]['end_frame']
-		interval = cam_files[0]['interval']
-
-		cam_folders = dict(zip(cam_names, cam_folders))
-		cam_files = dict(zip(cam_names, cam_files))		
 		down_path = dict(zip(cam_names, down_path))
 		
-		cameras = get_cameras(os.path.join(root_seq, 'calibration_' + sequence + '.json'), cam_names)
+		cameras = get_cmu_cameras(os.path.join(root_seq, 'calibration_' + sequence + '.json'), cam_names)
 		
-		pose_idx = 0
-
 		root_skeleton = os.path.join(root_seq, 'hdPose3d_stage1_coco19')
 
 		prev_pose = dict()
 
-		for frame_idx, frame in enumerate(range(start_frame, end_frame, interval)):
+		for frame in range(time_window[sequence][0], time_window[sequence][1]):
 
 			bodies = os.path.join(root_skeleton, 'body3DScene_' + str(frame).zfill(8) + '.json')
 			bodies = json.load(open(bodies))['bodies']
 
 			if not bodies:
-				print('empty frame skipped')
 				continue
 
-			for body_pose in bodies:
+			for body in bodies:
+				body_id = body['id']
 
-				if (frame - start_frame) % frame_step[phase] != 0:
-					pose_idx += 1
-					continue
+				body_pose = np.array(body['joints19']).reshape((-1, 4))
 
-				body_id = body_pose['id']
+				if body_id in prev_pose:
 
-				body_pose = np.array(body_pose['joints19']).reshape((-1, 4))[:, :3]
+					displacement = np.linalg.norm(prev_pose[body_id] - body_pose[:, :3], axis = 1)
 
-				if args.static_filter and body_id in prev_pose:
-
-					displacement = np.linalg.norm(prev_pose[body_id] - body_pose, axis = 1)
-
-					if np.all(displacement < args.thresh_static):
-						print('static pose skipped', body_id)
-						pose_idx += 1
+					if np.all(displacement < 10.0):
 						continue
 
 				for cam_name in cam_names:
-
 					image_path = os.path.join(cam_folders[cam_name], cam_name + '_' + str(frame).zfill(8) + '.jpg')
 
 					if not os.path.exists(image_path):
@@ -282,28 +175,29 @@ def get_cmu_group(phase, args):
 					if not os.path.exists(down_path[cam_name]):
 						os.mkdir(down_path[cam_name])
 
-					image_coord = np.array(cam_files[cam_name]['image_coord'][pose_idx])
+					image_coord = cameras[cam_name].world_to_image(body_pose[:, :3])
 
 					new_path = os.path.join(down_path[cam_name], str(frame) + '.' + str(body_id) + '.jpg')
 
-					paths = (image_path, new_path)
-					annos = (image_coord, body_pose, cameras[cam_name])
+					valid = (0.2 <= body_pose[:, 3])
 
-					processes.append(pool.apply_async(func = make_sample, args = (paths, annos, args)))
+					if near_entry(body_pose[:, :3], valid):
+						continue
 
-				prev_pose[body_id] = body_pose
+					bbox = boxlib.bb_of_points(image_coord[valid])
 
-				pose_idx += 1
+					image = jpeg4py.JPEG(image_path).decode()
 
-			print('collecting samples [', str(frame_idx) + '/' + str((end_frame - start_frame) / interval), '] sequence', sequence)
+					sample = dict(skeleton = body_pose[:, :3], valid = valid, image = new_path, bbox = detect_bbox(image, bbox))
 
-	pool.close()
-	pool.join()
+					samples.append(make_sample(sample, cameras[cam_name], image, args))
 
-	samples = [process.get() for process in processes]
-	samples = [sample for sample in samples if sample]
+				prev_pose[body_id] = body_pose[:, :3]
 
-	return data_info, samples
+			print('collecting samples [', str(time_window[sequence][0]), '-', str(frame), '-', str(time_window[sequence][1]), '] sequence', sequence)
+
+	with open(os.path.join(args.data_root_path, 'samples.pkl'), 'wb') as file:
+		pickle.dump(samples, file)
 
 
 def load_coords(path, key_foots, stride):
@@ -370,88 +264,26 @@ def get_h36m_cameras(metadata):
 	]
 
 
-def make_h36m_sample(paths, annos, args):
-	'''
-	params
-		bbox: (4,) bounding box in original camera view
-		body_pose: (19 x 3) joint coords in world space
-		image_coord: (19 x 3) joint coords in image space with confidence scores
-		image_path: path to image under original camera view
-	returns
-		pose sample with path to down-scaled image and corresponding box/image_coord
-	'''
-	image_path, new_path = paths
-	bbox, body_pose, camera = annos
-
-	valid = np.ones(args.num_joints).astype(np.bool)
-
-	expand_side = np.sum((bbox[2:] / args.random_zoom) ** 2) ** 0.5
-
-	box_center = bbox[:2] + bbox[2:] / 2
-
-	scale_factor = min(args.side_in / np.max(bbox[2:]) / args.random_zoom, 1.0)
-
-	dest_side = int(np.round(expand_side * scale_factor))
-
-	new_camera = copy.deepcopy(camera)
-	new_camera.shift_to_center(box_center, (expand_side, expand_side))
-	new_camera.scale_output(scale_factor)
-
-	new_bbox = cameralib.reproject_points(bbox[None, :2], camera, new_camera)[0]
-
-	new_bbox = np.concatenate((new_bbox, bbox[2:] * scale_factor))
-
-	if not os.path.exists(new_path):
-
-		image = jpeg4py.JPEG(image_path).decode()
-
-		new_image = cameralib.reproject_image(image, camera, new_camera, (dest_side, dest_side))
-
-		cv2.imwrite(new_path, new_image[:, :, ::-1])
-
-	return PoseSample(new_path, body_pose, valid, new_bbox, new_camera)
-
-
 def get_h36m_group(phase, args):
 
 	assert os.path.isdir(args.data_down_path)
 
-	cameras = get_h36m_cameras(os.path.join(args.data_root_path, 'metadata.xml'))
+	detector = utils.Detector()
 
-	from joint_settings import h36m_short_names as short_names
-	from joint_settings import h36m_parent as parent
-	from joint_settings import h36m_mirror as mirror
-	from joint_settings import h36m_base_joint as base_joint
-
-	mapper = dict(zip(short_names, range(len(short_names))))
-
-	map_mirror = [mapper[mirror[name]] for name in short_names if name in mirror]
-	map_parent = [mapper[parent[name]] for name in short_names if name in parent]
-
-	_mirror = np.arange(len(short_names))
-	_parent = np.arange(len(short_names))
-
-	_mirror[np.array([name in mirror for name in short_names])] = np.array(map_mirror)
-	_parent[np.array([name in parent for name in short_names])] = np.array(map_parent)
-
-	data_info = JointInfo(short_names, _parent, _mirror, mapper[base_joint])
+	cameras = globals()['get_' + args.data_name + '_cameras'](os.path.join(args.data_root_path, 'metadata.xml'))
 
 	partitions = dict(
 		train = [1, 5, 6, 7, 8],
-		valid = [9, 11],
-		test = [9, 11]
+		valid = [9, 11]
 	)
 	stride = dict(
 		train = 5,
-		valid = 64,
-		test = 64
+		valid = 64
 	)
 	def cond(root_path, elem):
 		return os.path.isdir(os.path.join(root_path, elem)) and '_' not in elem
 
-	processes = []
-
-	pool = multiprocessing.Pool(args.num_processes)
+	samples = []
 
 	for partition in partitions[phase]:
 
@@ -468,7 +300,7 @@ def get_h36m_group(phase, args):
 
 			camera = cameras[camera_id][partition - 1]
 
-			print('collecting samples', str(index) + '/' + str(len(activities) * 4), 'partition', partition)
+			print('collecting samples', str(index) + '|' + str(len(activities) * 4), 'partition', partition)
 
 			image_paths, body_poses, bboxes = collect_data(root_part, activity, camera_id, stride[phase])
 
@@ -482,16 +314,17 @@ def get_h36m_group(phase, args):
 
 			for image_path, new_path, body_pose, bbox in zip(image_paths, new_paths, body_poses, bboxes):
 
-				paths = (image_path, new_path)
-				annos = (bbox, body_pose, camera)
+				image = jpeg4py.JPEG(image_path).decode()
 
-				processes.append(pool.apply_async(func = make_h36m_sample, args = (paths, annos, args)))
+				valid = np.ones(body_pose.shape[0]).astype(np.bool)
 
-	pool.close()
-	pool.join()
-	samples = [process.get() for process in processes]
+				sample = dict(skeleton = body_pose, valid = valid, image = new_path, bbox = detect_bbox(image, bbox, detector))
 
-	return data_info, samples
+				if sample['bbox'] is not None:
+					samples.append(make_sample(sample, camera, image, args))
+
+	with open(os.path.join(args.data_root_path, 'samples.pkl'), 'wb') as file:
+		pickle.dump(samples, file)
 
 
 def show_skeleton(image, image_coord, confidence, message = '', bbox = None):
