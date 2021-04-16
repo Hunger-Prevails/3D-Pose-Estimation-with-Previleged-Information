@@ -1,15 +1,14 @@
 import os
+import log
 import torch
 import numpy as np
 import torch.nn as nn
 import torch.backends.cudnn as cudnn
 import importlib
+import depth_train
 
 from opts import args
 from utils import JointInfo
-from depth_datasets import get_data_loader
-from log import Logger
-from depth_train import Trainer
 
 
 def get_info():
@@ -113,6 +112,7 @@ def create_pair(args):
 
     return model, teacher, state
 
+
 def main():
     assert not (args.resume and args.pretrain)
     assert not (args.do_fusion and args.depth_only)
@@ -126,21 +126,23 @@ def main():
 
     data_info = get_info()
 
-    if args.test_only:
-        test_loader = get_data_loader(args, 'test', data_info)
-    elif args.val_only:
-        test_loader = get_data_loader(args, 'valid', data_info)
-    else:
-        test_loader = get_data_loader(args, 'valid', data_info)
+    module = depth_train.get_loader(args)
 
-        data_loader = get_data_loader(args, 'train', data_info)
+    if args.test_only:
+        test_loader = module.data_loader(args, 'test', data_info)
+    elif args.val_only:
+        test_loader = module.data_loader(args, 'valid', data_info)
+    else:
+        test_loader = module.data_loader(args, 'valid', data_info)
+
+        data_loader = module.data_loader(args, 'train', data_info)
 
     print('=> Dataloaders are ready')
 
-    logger = Logger(args, state)
+    logger = log.Logger(args, state)
     print('=> Logger is ready')
 
-    trainer = Trainer(args, model, data_info)
+    trainer = depth_train.Trainer(args, model, data_info)
     print('=> Trainer is ready')
 
     if args.do_teach:

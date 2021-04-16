@@ -1,16 +1,37 @@
+import json
+import utils
 import torch
 import torch.nn as nn
 import numpy as np
 import torch.optim as optim
-import utils
+import importlib
 
-from torch.autograd import Variable
-from depth_datasets import get_data_loader
+
+def get_loader(args):
+    with open('/globalwork/liu/metadata.json') as file:
+        metadata = json.load(file)
+
+    args.no_depth = metadata['no_depth'][args.data_name]
+
+    return importlib.import_module(metadata['loader'][args.data_name])
+
 
 def wrap_by_name(names, params):
     param_convs = [param for name, param in zip(names, params) if 'bn' in name]
     param_bns = [param for name, param in zip(names, params) if 'bn' not in name]
     return [dict(params = param_convs), dict(params = param_bns)]
+
+
+def to_test_worker(test_loader, no_depth, depth_only):
+
+    if no_depth:
+        for in_image, true_cam, valid_mask, color_br in test_loader:
+            yield in_image, true_cam, valid_mask, color_br
+    else:
+        for color_image, depth_image, true_cam, valid_mask, color_br in test_loader:
+            in_image = depth_image if depth_only else color_image
+            yield in_image, true_cam, valid_mask, color_br
+    return
 
 
 class Trainer:
@@ -26,6 +47,7 @@ class Trainer:
         self.list_names = [name for name, param in model.named_parameters()]
 
         self.half_acc = args.half_acc
+        self.no_depth = args.no_depth
         self.depth_only = args.depth_only
         self.do_fusion = args.do_fusion
         self.do_teach = args.do_teach
@@ -34,7 +56,7 @@ class Trainer:
 
         if args.semi_teach:
             args.data_name = 'pku'
-            self.semi_loader = get_data_loader(args, 'train', data_info)
+            self.semi_loader = get_loader(args).data_loader(args, 'train', data_info)
             self.semi_worker = iter(self.semi_loader)
 
         if args.half_acc:
@@ -508,9 +530,9 @@ class Trainer:
 
         cam_stats = []
 
-        for i, (color_image, depth_image, true_cam, valid_mask, color_br) in enumerate(test_loader):
+        test_worker = to_test_worker(test_loader, self.no_depth, self.depth_only)
 
-            in_image = depth_image if self.depth_only else color_image
+        for i, (in_image, true_cam, valid_mask, color_br) in enumerate(test_worker):
 
             if self.n_cudas:
                 in_image = in_image.half().to(cuda_device) if self.half_acc else in_image.to(cuda_device)
