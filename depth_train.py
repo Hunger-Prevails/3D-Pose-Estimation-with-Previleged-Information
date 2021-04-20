@@ -11,8 +11,6 @@ def get_loader(args):
     with open('/globalwork/liu/metadata.json') as file:
         metadata = json.load(file)
 
-    args.no_depth = metadata['no_depth'][args.data_name]
-
     return importlib.import_module(metadata['loader'][args.data_name])
 
 
@@ -47,12 +45,17 @@ class Trainer:
         self.list_names = [name for name, param in model.named_parameters()]
 
         self.half_acc = args.half_acc
-        self.no_depth = args.no_depth
         self.depth_only = args.depth_only
         self.do_fusion = args.do_fusion
         self.do_teach = args.do_teach
         self.semi_teach = args.semi_teach
         self.sigmoid = args.sigmoid
+
+        with open('/globalwork/liu/metadata.json') as file:
+            metadata = json.load(file)
+
+        self.no_depth = metadata['no_depth'][args.data_name]
+        self.thresh = metadata['thresholds'][args.data_name]
 
         if args.semi_teach:
             args.data_name = 'pku'
@@ -90,11 +93,6 @@ class Trainer:
         self.grad_scaling = args.grad_scaling
         self.loss_div = args.loss_div
 
-        self.thresh = dict(
-            solid = args.thresh_solid * args.loss_div,
-            close = args.thresh_close * args.loss_div,
-            rough = args.thresh_rough * args.loss_div
-        )
         self.criterion = nn.__dict__[args.criterion + 'Loss'](reduction = 'mean')
 
         if args.n_cudas:

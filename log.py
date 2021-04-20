@@ -102,4 +102,4 @@ class Logger:
 
     def print_rec(self, record):
         for key, value in record.items():
-            print('[' + key + ']: {:.4f}'.format(value))
+            print('{:>9}'.format(key) + ':', '{:.4f}'.format(value))

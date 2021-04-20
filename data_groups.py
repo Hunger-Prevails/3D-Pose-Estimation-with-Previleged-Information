@@ -228,16 +228,16 @@ def collect_data(root_part, activity, camera_id, stride):
 
 	bboxes = np.load(path_bbox)[::stride]
 
-	return image_paths, body_poses / 10.0, bboxes
+	return image_paths, body_poses, bboxes
 
 
-def get_h36m_cameras(metadata):
+def get_h36m_cameras(calib_file):
 
 	def make_h36m_camera(extrinsics, intrinsics):
 		x_angle, y_angle, z_angle = extrinsics[0:3]
 		R = transforms3d.euler.euler2mat(x_angle, y_angle, z_angle, 'rxyz')
 
-		t = extrinsics[3:6] / 10.0
+		t = extrinsics[3:6]
 		f = intrinsics[:2]
 		c = intrinsics[2:4]
 		k = intrinsics[4:7]
@@ -248,7 +248,7 @@ def get_h36m_cameras(metadata):
 
 		return cameralib.Camera(t, R, intrinsics, distorts)
 
-	root = ElementTree.parse(metadata).getroot()
+	root = ElementTree.parse(calib_file).getroot()
 
 	cam_params_text = root.findall('w0')[0].text
 

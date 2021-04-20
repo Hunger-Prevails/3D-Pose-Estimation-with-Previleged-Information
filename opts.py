@@ -64,13 +64,8 @@ parser.add_argument('-weight_decay', default=4e-5, type=float, help='Weight deca
 parser.add_argument('-box_margin', default=0.6, type=float, help='factor for generating pseudo bbox from image coords')
 parser.add_argument('-alpha', default=0.1, type=float, help='loss weight for alpha blend')
 parser.add_argument('-alpha_warmup', default=0.1, type=float, help='warmup value for alpha under distillation setup')
-parser.add_argument('-depth_range', default=100.0, type=float, help='depth range of prediction')
+parser.add_argument('-depth_range', default=1000.0, type=float, help='depth range of prediction')
 parser.add_argument('-random_zoom', default=0.9, type=float, help='scale for random zoom operation')
-parser.add_argument('-loss_div', default=1.0, type=float, help='divisor applied to both ground-truth and estimation before loss is calculated')
-
-# evaluation options
-parser.add_argument('-thresh_solid', default=0.5, type=float, help='threshold for a solid estimation')
-parser.add_argument('-thresh_close', default=2.0, type=float, help='threshold for a close estimation')
-parser.add_argument('-thresh_rough', default=5.0, type=float, help='threshold for a rough estimation')
+parser.add_argument('-loss_div', default=10.0, type=float, help='divisor applied to both ground-truth and estimation before loss is calculated')
 
 args = parser.parse_args()
