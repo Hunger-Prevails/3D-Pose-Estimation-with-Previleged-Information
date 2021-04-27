@@ -61,7 +61,7 @@ def create_model(args):
         model_keys = set(model.state_dict().keys())
 
         assert len(model_keys.difference(toy_keys)) == 0
-        
+
         model.load_state_dict(checkpoint)
 
     if args.resume:
@@ -71,9 +71,8 @@ def create_model(args):
         model.load_state_dict(checkpoint['model'])
         state = checkpoint['state']
 
-    if args.n_cudas:
-        cudnn.benchmark = True
-        model = model.cuda() if args.n_cudas == 1 else nn.DataParallel(model, device_ids = range(args.n_cudas)).cuda()
+    cudnn.benchmark = True
+    model = model.cuda() if args.n_cudas == 1 else nn.DataParallel(model, device_ids = range(args.n_cudas)).cuda()
 
     return model, state
 
@@ -98,6 +97,25 @@ def create_pair(args):
     model = getattr(model_creator, args.model)(args, args.pretrain)
     state = None
 
+    if args.test_only or args.val_only:
+        save_path = os.path.join(args.save_path, args.model + '-' + args.suffix)
+
+        print('=> Loading checkpoint from ' + os.path.join(save_path, 'best.pth'))
+        assert os.path.exists(save_path)
+
+        best = torch.load(os.path.join(save_path, 'best.pth'))
+        best = best['best'];
+
+        checkpoint = os.path.join(save_path, 'model_%d.pth' % best)
+        checkpoint = torch.load(checkpoint)['model']
+
+        toy_keys = set(checkpoint.keys())
+        model_keys = set(model.state_dict().keys())
+
+        assert len(model_keys.difference(toy_keys)) == 0
+
+        model.load_state_dict(checkpoint)
+
     if args.resume:
         print('=> Loading checkpoint from ' + args.model_path)
         checkpoint = torch.load(args.model_path)
@@ -105,10 +123,9 @@ def create_pair(args):
         model.load_state_dict(checkpoint['model'])
         state = checkpoint['state']
 
-    if args.n_cudas:
-        cudnn.benchmark = True
-        model = model.cuda() if args.n_cudas == 1 else nn.DataParallel(model, device_ids = range(args.n_cudas)).cuda()
-        teacher = teacher.cuda() if args.n_cudas == 1 else nn.DataParallel(model, device_ids = range(args.n_cudas)).cuda()
+    cudnn.benchmark = True
+    model = model.cuda() if args.n_cudas == 1 else nn.DataParallel(model, device_ids = range(args.n_cudas)).cuda()
+    teacher = teacher.cuda() if args.n_cudas == 1 else nn.DataParallel(model, device_ids = range(args.n_cudas)).cuda()
 
     return model, teacher, state
 

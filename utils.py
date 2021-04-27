@@ -12,6 +12,29 @@ import pyyolo
 from builtins import zip as xzip
 
 
+def save_array(array, i_batch, diff_path):
+	save_file = os.path.join(diff_path, 'batch_' + str(i_batch) + '_spec.npy')
+
+	if os.path.exists(save_file):
+		return
+
+	with open(save_file, 'wb') as file:
+		np.save(file, array)
+
+
+def save_tensor(tensor, i_batch, diff_path):
+	if not os.path.exists(diff_path):
+		os.mkdir(diff_path)
+
+	save_file = os.path.join(diff_path, 'batch_' + str(i_batch) + '.npy')
+
+	if os.path.exists(save_file):
+		return
+
+	with open(save_file, 'wb') as file:
+		np.save(file, tensor.cpu().numpy())
+
+
 def to_depth(image, depth_cam):
 	coord_u, coord_v = np.meshgrid(range(image.shape[1]), range(image.shape[0]))
 

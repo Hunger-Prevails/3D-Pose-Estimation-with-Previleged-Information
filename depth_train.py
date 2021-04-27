@@ -1,3 +1,4 @@
+import os
 import json
 import utils
 import torch
@@ -7,8 +8,11 @@ import torch.optim as optim
 import importlib
 
 
+root_me = '/globalwork/liu'
+
+
 def get_loader(args):
-    with open('/globalwork/liu/metadata.json') as file:
+    with open(os.path.join(root_me, 'metadata.json')) as file:
         metadata = json.load(file)
 
     return importlib.import_module(metadata['loader'][args.data_name])
@@ -23,21 +27,18 @@ def wrap_by_name(names, params):
 def to_test_worker(test_loader, no_depth, depth_only):
 
     if no_depth:
-        for in_image, true_cam, valid_mask, color_br in test_loader:
-            yield in_image, true_cam, valid_mask, color_br
+        for in_image, true_cam, true_val, color_br in test_loader:
+            yield in_image, true_cam, true_val, color_br
     else:
-        for color_image, depth_image, true_cam, valid_mask, color_br in test_loader:
+        for color_image, depth_image, true_cam, true_val, color_br in test_loader:
             in_image = depth_image if depth_only else color_image
-            yield in_image, true_cam, valid_mask, color_br
+            yield in_image, true_cam, true_val, color_br
     return
 
 
 class Trainer:
 
     def __init__(self, args, model, data_info):
-
-        assert args.half_acc <= args.n_cudas
-
         self.model = model
         self.data_info = data_info
 
@@ -51,11 +52,14 @@ class Trainer:
         self.semi_teach = args.semi_teach
         self.sigmoid = args.sigmoid
 
-        with open('/globalwork/liu/metadata.json') as file:
+        with open(os.path.join(root_me, 'metadata.json')) as file:
             metadata = json.load(file)
 
         self.no_depth = metadata['no_depth'][args.data_name]
         self.thresh = metadata['thresholds'][args.data_name]
+
+        self.save_diff = args.do_teach and (args.test_only or args.val_only)
+        self.diff_path = os.path.join(root_me, 'diff_' + args.data_name, args.suffix)
 
         if args.semi_teach:
             args.data_name = 'pku'
@@ -74,7 +78,6 @@ class Trainer:
         else:
             self.optimizer = optim.Adam(wrap_by_name(self.list_names, self.list_params), args.learn_rate, weight_decay = args.weight_decay)
 
-        self.n_cudas = args.n_cudas
         self.depth = args.depth
         self.num_joints = args.num_joints
         self.side_in = args.side_in
@@ -93,27 +96,29 @@ class Trainer:
         self.grad_scaling = args.grad_scaling
         self.loss_div = args.loss_div
 
-        self.criterion = nn.__dict__[args.criterion + 'Loss'](reduction = 'mean')
-
-        if args.n_cudas:
-            self.criterion = self.criterion.cuda()
+        self.criterion = nn.__dict__[args.criterion + 'Loss'](reduction = 'mean').cuda()
 
 
     def set_teacher(self, teacher):
         self.teacher = teacher.half() if self.half_acc else teacher
+        self.teacher.teach()
+        self.teacher.eval()
 
 
-    def semi_train(self, cuda_device):
+    def to(self, image, device):
+        return image.half().to(device) if self.half_acc else image.to(device)
+
+
+    def semi_train(self, device):
         try:
-            color_image, depth_image, true_cam, valid_mask = next(self.semi_worker)
+            color_image, depth_image, true_cam, true_val = next(self.semi_worker)
         except:
             self.semi_worker = iter(self.semi_loader)
 
-            color_image, depth_image, true_cam, valid_mask = next(self.semi_worker)
+            color_image, depth_image, true_cam, true_val = next(self.semi_worker)
 
-        if self.n_cudas:
-            color_image = color_image.half().to(cuda_device) if self.half_acc else color_image.to(cuda_device)
-            depth_image = depth_image.half().to(cuda_device) if self.half_acc else depth_image.to(cuda_device)
+        color_image = self.to(color_image, device)
+        depth_image = self.to(depth_image, device)
 
         semi_batch = true_cam.size(0)
 
@@ -133,7 +138,7 @@ class Trainer:
         return semi_batch, dist_loss
 
 
-    def distill_train(self, epoch, data_loader, cuda_device):
+    def distill_train(self, epoch, data_loader, device):
         n_batches = len(data_loader)
 
         cam_loss_sum = 0.0
@@ -144,14 +149,13 @@ class Trainer:
 
         side_out = (self.side_in - 1) // self.stride + 1
 
-        for i, (color_image, depth_image, true_cam, valid_mask) in enumerate(data_loader):
+        for i_batch, (color_image, depth_image, true_cam, true_val) in enumerate(data_loader):
 
-            if self.n_cudas:
-                color_image = color_image.half().to(cuda_device) if self.half_acc else color_image.to(cuda_device)
-                depth_image = depth_image.half().to(cuda_device) if self.half_acc else depth_image.to(cuda_device)
+            color_image = self.to(color_image, device)
+            depth_image = self.to(depth_image, device)
 
-                true_cam = true_cam.to(cuda_device)
-                valid_mask = valid_mask.to(cuda_device)
+            true_cam = true_cam.to(device)
+            true_val = true_val.to(device)
 
             full_batch = true_cam.size(0)
 
@@ -179,7 +183,7 @@ class Trainer:
 
             spec_cam = relat_cam + true_cam[:, key_index:key_index + 1]
 
-            cam_loss = self.criterion(spec_cam.view(-1, 3)[valid_mask.view(-1)] / self.loss_div, true_cam.view(-1, 3)[valid_mask.view(-1)] / self.loss_div)
+            cam_loss = self.criterion(spec_cam.view(-1, 3)[true_val.view(-1)] / self.loss_div, true_cam.view(-1, 3)[true_val.view(-1)] / self.loss_div)
 
             cam_loss_sum += cam_loss.item() * full_batch
             cam_loss_samples += full_batch
@@ -187,14 +191,14 @@ class Trainer:
             dist_loss_sum += dist_loss.item() * full_batch
             dist_loss_samples += full_batch
 
-            message = '[=] train Epoch[{0}] Batch[{1}|{2}] '.format(epoch, i, n_batches)
+            message = '[=] train Epoch[{0}] Batch[{1}|{2}] '.format(epoch, i_batch, n_batches)
             message += ' Cam Loss {:.4f} '.format(cam_loss.item())
             message += ' Dist Loss {:.4f} '.format(dist_loss.item())
 
             loss = dist_loss * self.get_dist_weight(epoch) + cam_loss
 
             if self.semi_teach:
-                semi_batch, semi_dist_loss = self.semi_train(cuda_device)
+                semi_batch, semi_dist_loss = self.semi_train(device)
 
                 dist_loss_sum += semi_dist_loss.item() * semi_batch
                 dist_loss_samples += semi_batch
@@ -258,7 +262,7 @@ class Trainer:
         return dict(dist_train_loss = dist_loss_sum, cam_train_loss = cam_loss_sum)
 
 
-    def fusion_train(self, epoch, data_loader, cuda_device):
+    def fusion_train(self, epoch, data_loader, device):
         n_batches = len(data_loader)
 
         loss_avg = 0
@@ -266,14 +270,13 @@ class Trainer:
 
         side_out = (self.side_in - 1) // self.stride + 1
 
-        for i, (color_image, depth_image, true_cam, valid_mask) in enumerate(data_loader):
+        for i_batch, (color_image, depth_image, true_cam, true_val) in enumerate(data_loader):
 
-            if self.n_cudas:
-                color_image = color_image.half().to(cuda_device) if self.half_acc else color_image.to(cuda_device)
-                depth_image = depth_image.half().to(cuda_device) if self.half_acc else depth_image.to(cuda_device)
+            color_image = self.to(color_image, device)
+            depth_image = self.to(depth_image, device)
 
-                true_cam = true_cam.to(cuda_device)
-                valid_mask = valid_mask.to(cuda_device)
+            true_cam = true_cam.to(device)
+            true_val = true_val.to(device)
 
             batch = true_cam.size(0)
 
@@ -289,9 +292,9 @@ class Trainer:
 
             spec_cam = relat_cam + true_cam[:, key_index:key_index + 1]
 
-            loss = self.criterion(spec_cam.view(-1, 3)[valid_mask.view(-1)] / self.loss_div, true_cam.view(-1, 3)[valid_mask.view(-1)] / self.loss_div)
+            loss = self.criterion(spec_cam.view(-1, 3)[true_val.view(-1)] / self.loss_div, true_cam.view(-1, 3)[true_val.view(-1)] / self.loss_div)
 
-            print('| train Epoch[%d] [%d/%d]  Loss %1.4f' % (epoch, i, n_batches, loss.item()))
+            print('| train Epoch[%d] [%d/%d]  Loss %1.4f' % (epoch, i_batch, n_batches, loss.item()))
 
             loss_avg += loss.item() * batch
 
@@ -349,7 +352,7 @@ class Trainer:
         return dict(cam_train_loss = loss_avg)
 
 
-    def vanilla_train(self, epoch, data_loader, cuda_device):
+    def vanilla_train(self, epoch, data_loader, device):
         n_batches = len(data_loader)
 
         loss_avg = 0
@@ -357,16 +360,12 @@ class Trainer:
 
         side_out = (self.side_in - 1) // self.stride + 1
 
-        for i, (color_image, depth_image, true_cam, valid_mask) in enumerate(data_loader):
+        for i_batch, (color_image, depth_image, true_cam, true_val) in enumerate(data_loader):
 
-            in_image = depth_image if self.depth_only else color_image
+            in_image = self.to(depth_image if self.depth_only else color_image, device)
 
-            if self.n_cudas:
-                in_image = in_image.half().to(cuda_device) if self.half_acc else in_image.to(cuda_device)
-
-                true_cam = true_cam.to(cuda_device)
-
-                valid_mask = valid_mask.to(cuda_device)
+            true_cam = true_cam.to(device)
+            true_val = true_val.to(device)
 
             batch = true_cam.size(0)
 
@@ -382,9 +381,9 @@ class Trainer:
 
             spec_cam = relat_cam + true_cam[:, key_index:key_index + 1]
 
-            loss = self.criterion(spec_cam.view(-1, 3)[valid_mask.view(-1)] / self.loss_div, true_cam.view(-1, 3)[valid_mask.view(-1)] / self.loss_div)
+            loss = self.criterion(spec_cam.view(-1, 3)[true_val.view(-1)] / self.loss_div, true_cam.view(-1, 3)[true_val.view(-1)] / self.loss_div)
 
-            print('| train Epoch[%d] [%d/%d]  Loss %1.4f' % (epoch, i, n_batches, loss.item()), flush = True)
+            print('| train Epoch[%d] [%d/%d]  Loss %1.4f' % (epoch, i_batch, n_batches, loss.item()), flush = True)
 
             loss_avg += loss.item() * batch
 
@@ -454,7 +453,7 @@ class Trainer:
             return self.vanilla_train(epoch, data_loader, torch.device('cuda'))
 
 
-    def fusion_test(self, epoch, test_loader, cuda_device):
+    def fusion_test(self, epoch, test_loader, device):
         n_batches = len(test_loader)
 
         loss_avg = 0
@@ -464,14 +463,13 @@ class Trainer:
 
         cam_stats = []
 
-        for i, (color_image, depth_image, true_cam, valid_mask, color_br) in enumerate(test_loader):
+        for i_batch, (color_image, depth_image, true_cam, true_val, color_br) in enumerate(test_loader):
 
-            if self.n_cudas:
-                color_image = color_image.half().to(cuda_device) if self.half_acc else color_image.to(cuda_device)
-                depth_image = depth_image.half().to(cuda_device) if self.half_acc else depth_image.to(cuda_device)
+            color_image = self.to(color_image, device)
+            depth_image = self.to(depth_image, device)
 
-                true_cam = true_cam.to(cuda_device)
-                valid_mask = valid_mask.to(cuda_device)
+            true_cam = true_cam.to(device)
+            true_val = true_val.to(device)
 
             batch = true_cam.size(0)
 
@@ -488,13 +486,13 @@ class Trainer:
 
                 spec_cam = relat_cam + true_cam[:, key_index:key_index + 1]
 
-                loss = self.criterion(spec_cam.view(-1, 3)[valid_mask.view(-1)] / self.loss_div, true_cam.view(-1, 3)[valid_mask.view(-1)] / self.loss_div)
+                loss = self.criterion(spec_cam.view(-1, 3)[true_val.view(-1)] / self.loss_div, true_cam.view(-1, 3)[true_val.view(-1)] / self.loss_div)
 
             loss_avg += loss.item() * batch
 
             total += batch
 
-            valid_mask = valid_mask.cpu().numpy().astype(np.bool)
+            true_val = true_val.cpu().numpy().astype(np.bool)
 
             spec_cam = spec_cam.cpu().numpy()
             true_cam = true_cam.cpu().numpy()
@@ -502,9 +500,9 @@ class Trainer:
             spec_cam = np.einsum('Bij,BCj->BCi', color_br, spec_cam)
             true_cam = np.einsum('Bij,BCj->BCi', color_br, true_cam)
 
-            cam_stats.append(utils.analyze(spec_cam, true_cam, valid_mask, self.data_info.mirror, self.thresh))
+            cam_stats.append(utils.analyze(spec_cam, true_cam, true_val, self.data_info.mirror, self.thresh))
 
-            print('| test Epoch[%d] [%d/%d]  Cam Loss %1.4f' % (epoch, i, n_batches, loss.item()))
+            print('| test Epoch[%d] [%d/%d]  Cam Loss %1.4f' % (epoch, i_batch, n_batches, loss.item()))
 
         loss_avg /= total
 
@@ -518,7 +516,7 @@ class Trainer:
         return record
 
 
-    def vanilla_test(self, epoch, test_loader, cuda_device):
+    def vanilla_test(self, epoch, test_loader, device):
         n_batches = len(test_loader)
 
         loss_avg = 0
@@ -530,14 +528,12 @@ class Trainer:
 
         test_worker = to_test_worker(test_loader, self.no_depth, self.depth_only)
 
-        for i, (in_image, true_cam, valid_mask, color_br) in enumerate(test_worker):
+        for i_batch, (in_image, true_cam, true_val, color_br) in enumerate(test_worker):
 
-            if self.n_cudas:
-                in_image = in_image.half().to(cuda_device) if self.half_acc else in_image.to(cuda_device)
+            in_image = self.to(in_image, device)
 
-                true_cam = true_cam.to(cuda_device)
-
-                valid_mask = valid_mask.to(cuda_device)
+            true_cam = true_cam.to(device)
+            true_val = true_val.to(device)
 
             batch = true_cam.size(0)
 
@@ -554,13 +550,13 @@ class Trainer:
 
                 spec_cam = relat_cam + true_cam[:, key_index:key_index + 1]
 
-                loss = self.criterion(spec_cam.view(-1, 3)[valid_mask.view(-1)] / self.loss_div, true_cam.view(-1, 3)[valid_mask.view(-1)] / self.loss_div)
+                loss = self.criterion(spec_cam.view(-1, 3)[true_val.view(-1)] / self.loss_div, true_cam.view(-1, 3)[true_val.view(-1)] / self.loss_div)
 
             loss_avg += loss.item() * batch
 
             total += batch
 
-            valid_mask = valid_mask.cpu().numpy().astype(np.bool)
+            true_val = true_val.cpu().numpy().astype(np.bool)
 
             spec_cam = spec_cam.cpu().numpy()
             true_cam = true_cam.cpu().numpy()
@@ -568,9 +564,9 @@ class Trainer:
             spec_cam = np.einsum('Bij,BCj->BCi', color_br, spec_cam)
             true_cam = np.einsum('Bij,BCj->BCi', color_br, true_cam)
 
-            cam_stats.append(utils.analyze(spec_cam, true_cam, valid_mask, self.data_info.mirror, self.thresh))
+            cam_stats.append(utils.analyze(spec_cam, true_cam, true_val, self.data_info.mirror, self.thresh))
 
-            print('| test Epoch[%d] [%d/%d]  Cam Loss %1.4f' % (epoch, i, n_batches, loss.item()))
+            print('| test Epoch[%d] [%d/%d]  Cam Loss %1.4f' % (epoch, i_batch, n_batches, loss.item()))
 
         loss_avg /= total
 
@@ -587,6 +583,8 @@ class Trainer:
     def test(self, epoch, test_loader):
         self.model.eval()
 
+        if self.save_diff:
+            return self.save_test(epoch, test_loader, torch.device('cuda'))
         if self.do_teach:
             return self.vanilla_test(epoch, test_loader, torch.device('cuda'))
         elif self.do_fusion:
@@ -623,3 +621,90 @@ class Trainer:
             return alphas[epoch - 1]
         else:
             return self.alpha
+
+
+    def save_test(self, epoch, test_loader, device):
+        n_batches = len(test_loader)
+
+        cam_loss_sum = 0.0
+        dist_loss_sum = 0.0
+
+        cam_loss_samples = 0
+        dist_loss_samples = 0
+
+        side_out = (self.side_in - 1) // self.stride + 1
+
+        cam_stats = []
+
+        for i_batch, (color_image, depth_image, true_cam, true_val, color_br) in enumerate(test_loader):
+
+            color_image = self.to(color_image, device)
+            depth_image = self.to(depth_image, device)
+
+            true_cam = true_cam.to(device)
+            true_val = true_val.to(device)
+
+            full_batch = true_cam.size(0)
+
+            with torch.no_grad():
+                teach_cam, teach_last = self.teacher(color_image, depth_image)
+                if self.half_acc:
+                    teach_last = teach_last.float()
+
+                cam_feat, last_feat = self.model(color_image)
+                if self.half_acc:
+                    cam_feat = cam_feat.float()
+                    last_feat = last_feat.float()
+
+                diff = (torch.sigmoid(teach_last) - torch.sigmoid(last_feat)) if self.sigmoid else (teach_last - last_feat)
+
+                utils.save_tensor(diff, i_batch, self.diff_path)
+
+                dist_loss = torch.linalg.norm(diff.view(full_batch, -1), dim = -1).mean()
+
+                heat_cam = utils.to_heatmap(cam_feat, self.depth, self.num_joints, side_out, side_out)
+
+                key_index = self.data_info.key_index
+
+                relat_cam = utils.decode(heat_cam, self.depth_range)
+
+                relat_cam = relat_cam - relat_cam[:, key_index:key_index + 1]
+
+                spec_cam = relat_cam + true_cam[:, key_index:key_index + 1]
+
+                cam_loss = self.criterion(spec_cam.view(-1, 3)[true_val.view(-1)] / self.loss_div, true_cam.view(-1, 3)[true_val.view(-1)] / self.loss_div)
+
+            cam_loss_sum += cam_loss.item() * full_batch
+            cam_loss_samples += full_batch
+
+            dist_loss_sum += dist_loss.item() * full_batch
+            dist_loss_samples += full_batch
+
+            true_val = true_val.cpu().numpy().astype(np.bool)
+
+            spec_cam = spec_cam.cpu().numpy()
+            true_cam = true_cam.cpu().numpy()
+
+            spec_cam = np.einsum('Bij,BCj->BCi', color_br, spec_cam)
+            true_cam = np.einsum('Bij,BCj->BCi', color_br, true_cam)
+
+            utils.save_array(spec_cam, i_batch, self.diff_path)
+
+            cam_stats.append(utils.analyze(spec_cam, true_cam, true_val, self.data_info.mirror, self.thresh))
+
+            message = '[=] test Epoch[{0}] Batch[{1}|{2}] '.format(epoch, i_batch, n_batches)
+            message += ' Cam Loss {:.4f} '.format(cam_loss.item())
+            message += ' Dist Loss {:.4f} '.format(dist_loss.item())
+            print(message)
+
+        cam_loss_sum /= cam_loss_samples
+        dist_loss_sum /= dist_loss_samples
+
+        record = dict(cam_test_loss = cam_loss_sum, dist_test_loss = dist_loss_sum)
+        record.update(utils.parse_epoch(cam_stats))
+
+        print('\n=> test Epoch[%d]  Cam Loss: %1.4f  Dist Loss: %1.4f\n' % (epoch, cam_loss_sum, dist_loss_sum))
+
+        print('=>[SPEC] cam_mean: %1.3f  [pck]: %1.3f  [auc]: %1.3f\n' % (record['cam_mean'], record['score_pck'], record['score_auc']))
+
+        return record

@@ -62,9 +62,8 @@ def create_model(args):
         model.load_state_dict(checkpoint['model'])
         state = checkpoint['state']
 
-    if args.n_cudas:
-        cudnn.benchmark = True
-        model = model.cuda() if args.n_cudas == 1 else nn.DataParallel(model, device_ids = range(args.n_cudas)).cuda()
+    cudnn.benchmark = True
+    model = model.cuda() if args.n_cudas == 1 else nn.DataParallel(model, device_ids = range(args.n_cudas)).cuda()
 
     return model, state
 

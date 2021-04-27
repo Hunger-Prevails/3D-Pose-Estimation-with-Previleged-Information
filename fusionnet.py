@@ -140,7 +140,9 @@ class ResNet(nn.Module):
 
         super(ResNet, self).__init__()
 
+        self.teacher = False
         self.do_teach = args.do_teach
+        self.save_diff = args.do_teach and (args.test_only or args.val_only)
         self.early_dist = args.early_dist
 
         stride2 = int(np.minimum(np.maximum(np.log2(args.stride), 2), 3) - 1)
@@ -222,10 +224,17 @@ class ResNet(nn.Module):
         x = self.layer4(m)
         z = self.regressor(x)
 
-        if self.do_teach and self.training:
+        if self.teacher:
+            return z, m if self.early_dist else x
+        elif self.save_diff:
+            return z, m if self.early_dist else x
+        elif self.do_teach and self.training:
             return z, m if self.early_dist else x
         else:
             return z
+
+    def teach(self):
+        self.teacher = True
 
 
 def manual_update(model_dict, toy_dict):
