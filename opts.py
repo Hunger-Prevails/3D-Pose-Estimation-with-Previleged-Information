@@ -23,6 +23,7 @@ parser.add_argument('-partial_conv', action='store_true', help='whether to repla
 parser.add_argument('-to_depth', action='store_true', help='whether to convert raw depth to actual depth')
 parser.add_argument('-early_dist', action='store_true', help='whether to impose distillation loss on the third stage feature map')
 parser.add_argument('-sigmoid', action='store_true', help='whether to apply sigmoid function to the feature maps before norm is taken')
+parser.add_argument('-save_last', action='store_true', help='whether to save the last feature map of the model')
 
 # augmentation options
 parser.add_argument('-geometry', action='store_true', help='whether to perform geometry augmentation')

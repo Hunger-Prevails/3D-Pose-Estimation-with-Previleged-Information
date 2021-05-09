@@ -48,13 +48,13 @@ def create_model(args):
     if args.test_only or args.val_only:
         save_path = os.path.join(args.save_path, args.model + '-' + args.suffix)
 
-        print('=> Loading checkpoint from ' + os.path.join(save_path, 'best.pth'))
         assert os.path.exists(save_path)
 
         best = torch.load(os.path.join(save_path, 'best.pth'))
         best = best['best'];
 
-        checkpoint = os.path.join(save_path, 'model_%d.pth' % best)
+        checkpoint = os.path.join(save_path, 'model_{}.pth'.format(best))
+        print('=> Loads checkpoint from ' + checkpoint)
         checkpoint = torch.load(checkpoint)['model']
 
         toy_keys = set(checkpoint.keys())
@@ -65,7 +65,7 @@ def create_model(args):
         model.load_state_dict(checkpoint)
 
     if args.resume:
-        print('=> Loading checkpoint from ' + args.model_path)
+        print('=> Loads checkpoint from ' + args.model_path)
         checkpoint = torch.load(args.model_path)
         
         model.load_state_dict(checkpoint['model'])
@@ -97,27 +97,8 @@ def create_pair(args):
     model = getattr(model_creator, args.model)(args, args.pretrain)
     state = None
 
-    if args.test_only or args.val_only:
-        save_path = os.path.join(args.save_path, args.model + '-' + args.suffix)
-
-        print('=> Loading checkpoint from ' + os.path.join(save_path, 'best.pth'))
-        assert os.path.exists(save_path)
-
-        best = torch.load(os.path.join(save_path, 'best.pth'))
-        best = best['best'];
-
-        checkpoint = os.path.join(save_path, 'model_%d.pth' % best)
-        checkpoint = torch.load(checkpoint)['model']
-
-        toy_keys = set(checkpoint.keys())
-        model_keys = set(model.state_dict().keys())
-
-        assert len(model_keys.difference(toy_keys)) == 0
-
-        model.load_state_dict(checkpoint)
-
     if args.resume:
-        print('=> Loading checkpoint from ' + args.model_path)
+        print('=> Loads checkpoint from ' + args.model_path)
         checkpoint = torch.load(args.model_path)
 
         model.load_state_dict(checkpoint['model'])

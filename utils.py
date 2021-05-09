@@ -12,8 +12,8 @@ import pyyolo
 from builtins import zip as xzip
 
 
-def save_array(array, i_batch, diff_path):
-	save_file = os.path.join(diff_path, 'batch_' + str(i_batch) + '_spec.npy')
+def save_array(array, i_batch, last_path):
+	save_file = os.path.join(last_path, 'batch_' + str(i_batch) + '_spec.npy')
 
 	if os.path.exists(save_file):
 		return
@@ -22,11 +22,11 @@ def save_array(array, i_batch, diff_path):
 		np.save(file, array)
 
 
-def save_tensor(tensor, i_batch, diff_path):
-	if not os.path.exists(diff_path):
-		os.mkdir(diff_path)
+def save_tensor(tensor, i_batch, last_path):
+	if not os.path.exists(last_path):
+		os.mkdir(last_path)
 
-	save_file = os.path.join(diff_path, 'batch_' + str(i_batch) + '.npy')
+	save_file = os.path.join(last_path, 'batch_' + str(i_batch) + '.npy')
 
 	if os.path.exists(save_file):
 		return

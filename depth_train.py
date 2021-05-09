@@ -8,7 +8,7 @@ import torch.optim as optim
 import importlib
 
 
-root_me = '/globalwork/liu'
+root_me = os.path.join(os.sep, 'globalwork', 'liu')
 
 
 def get_loader(args):
@@ -58,8 +58,8 @@ class Trainer:
         self.no_depth = metadata['no_depth'][args.data_name]
         self.thresh = metadata['thresholds'][args.data_name]
 
-        self.save_diff = args.do_teach and (args.test_only or args.val_only)
-        self.diff_path = os.path.join(root_me, 'diff_' + args.data_name, args.suffix)
+        self.save_last = args.save_last
+        self.last_path = os.path.join(root_me, 'last_' + args.data_name, args.suffix)
 
         if args.semi_teach:
             args.data_name = 'pku'
@@ -101,8 +101,6 @@ class Trainer:
 
     def set_teacher(self, teacher):
         self.teacher = teacher.half() if self.half_acc else teacher
-        self.teacher.teach()
-        self.teacher.eval()
 
 
     def to(self, image, device):
@@ -123,9 +121,7 @@ class Trainer:
         semi_batch = true_cam.size(0)
 
         with torch.no_grad():
-            teach_cam, teach_last = self.teacher(color_image, depth_image)
-            if self.half_acc:
-                teach_last = teach_last.float()
+            teach_cam, teach_last = self.teach_infer(color_image, depth_image)
 
         cam_feat, last_feat = self.model(color_image)
         if self.half_acc:
@@ -160,14 +156,9 @@ class Trainer:
             full_batch = true_cam.size(0)
 
             with torch.no_grad():
-                teach_cam, teach_last = self.teacher(color_image, depth_image)
-                if self.half_acc:
-                    teach_last = teach_last.float()
+                teach_cam, teach_last = self.teach_infer(color_image, depth_image)
 
-            cam_feat, last_feat = self.model(color_image)
-            if self.half_acc:
-                cam_feat = cam_feat.float()
-                last_feat = last_feat.float()
+            cam_feat, last_feat = self.vanilla_infer(color_image, i_batch, True)
 
             diff = (torch.sigmoid(teach_last) - torch.sigmoid(last_feat)) if self.sigmoid else (teach_last - last_feat)
 
@@ -280,7 +271,7 @@ class Trainer:
 
             batch = true_cam.size(0)
 
-            cam_feat = self.model(color_image, depth_image).float() if self.half_acc else self.model(color_image, depth_image)
+            cam_feat = self.fusion_infer(color_image, depth_image, i_batch)
 
             heat_cam = utils.to_heatmap(cam_feat, self.depth, self.num_joints, side_out, side_out)
 
@@ -369,7 +360,7 @@ class Trainer:
 
             batch = true_cam.size(0)
 
-            cam_feat = self.model(in_image).float() if self.half_acc else self.model(in_image)
+            cam_feat = self.vanilla_infer(in_image, i_batch)
 
             heat_cam = utils.to_heatmap(cam_feat, self.depth, self.num_joints, side_out, side_out)
 
@@ -474,7 +465,7 @@ class Trainer:
             batch = true_cam.size(0)
 
             with torch.no_grad():
-                cam_feat = self.model(color_image, depth_image).float() if self.half_acc else self.model(color_image, depth_image)
+                cam_feat = self.fusion_infer(color_image, depth_image, i_batch)
 
                 heat_cam = utils.to_heatmap(cam_feat, self.depth, self.num_joints, side_out, side_out)
 
@@ -499,6 +490,9 @@ class Trainer:
 
             spec_cam = np.einsum('Bij,BCj->BCi', color_br, spec_cam)
             true_cam = np.einsum('Bij,BCj->BCi', color_br, true_cam)
+
+            if self.save_last:
+                utils.save_array(spec_cam, i_batch, self.last_path)
 
             cam_stats.append(utils.analyze(spec_cam, true_cam, true_val, self.data_info.mirror, self.thresh))
 
@@ -538,7 +532,7 @@ class Trainer:
             batch = true_cam.size(0)
 
             with torch.no_grad():
-                cam_feat = self.model(in_image).float() if self.half_acc else self.model(in_image)
+                cam_feat = self.vanilla_infer(in_image, i_batch)
 
                 heat_cam = utils.to_heatmap(cam_feat, self.depth, self.num_joints, side_out, side_out)
 
@@ -564,6 +558,9 @@ class Trainer:
             spec_cam = np.einsum('Bij,BCj->BCi', color_br, spec_cam)
             true_cam = np.einsum('Bij,BCj->BCi', color_br, true_cam)
 
+            if self.save_last:
+                utils.save_array(spec_cam, i_batch, self.last_path)
+
             cam_stats.append(utils.analyze(spec_cam, true_cam, true_val, self.data_info.mirror, self.thresh))
 
             print('| test Epoch[%d] [%d/%d]  Cam Loss %1.4f' % (epoch, i_batch, n_batches, loss.item()))
@@ -583,8 +580,6 @@ class Trainer:
     def test(self, epoch, test_loader):
         self.model.eval()
 
-        if self.save_diff:
-            return self.save_test(epoch, test_loader, torch.device('cuda'))
         if self.do_teach:
             return self.vanilla_test(epoch, test_loader, torch.device('cuda'))
         elif self.do_fusion:
@@ -623,88 +618,45 @@ class Trainer:
             return self.alpha
 
 
-    def save_test(self, epoch, test_loader, device):
-        n_batches = len(test_loader)
+    def vanilla_infer(self, in_image, i_batch, ret_last = False):
+        cam_feat, last_feat = self.model(in_image)
 
-        cam_loss_sum = 0.0
-        dist_loss_sum = 0.0
+        if self.half_acc:
+            cam_feat = cam_feat.float()
+            last_feat = last_feat.float()
 
-        cam_loss_samples = 0
-        dist_loss_samples = 0
+        if self.save_last:
+            utils.save_tensor(last_feat, i_batch, self.last_path)
 
-        side_out = (self.side_in - 1) // self.stride + 1
+        if ret_last:
+            return cam_feat, last_feat
+        else:
+            return cam_feat
 
-        cam_stats = []
 
-        for i_batch, (color_image, depth_image, true_cam, true_val, color_br) in enumerate(test_loader):
+    def fusion_infer(self, color_image, depth_image, i_batch, ret_last = False):
+        cam_feat, last_feat = self.model(color_image, depth_image)
 
-            color_image = self.to(color_image, device)
-            depth_image = self.to(depth_image, device)
+        if self.half_acc:
+            cam_feat = cam_feat.float()
+            last_feat = last_feat.float()
 
-            true_cam = true_cam.to(device)
-            true_val = true_val.to(device)
+        if self.save_last:
+            utils.save_tensor(last_feat, i_batch, self.last_path)
 
-            full_batch = true_cam.size(0)
+        if ret_last:
+            return cam_feat, last_feat
+        else:
+            return cam_feat
 
-            with torch.no_grad():
-                teach_cam, teach_last = self.teacher(color_image, depth_image)
-                if self.half_acc:
-                    teach_last = teach_last.float()
 
-                cam_feat, last_feat = self.model(color_image)
-                if self.half_acc:
-                    cam_feat = cam_feat.float()
-                    last_feat = last_feat.float()
+    def teach_infer(self, color_image, depth_image):
+        if self.do_fusion:
+            cam_feat, last_feat = self.teacher(color_image, depth_image)
+        else:
+            cam_feat, last_feat = self.teacher(depth_image if self.depth_only else color_image)
 
-                diff = (torch.sigmoid(teach_last) - torch.sigmoid(last_feat)) if self.sigmoid else (teach_last - last_feat)
-
-                utils.save_tensor(diff, i_batch, self.diff_path)
-
-                dist_loss = torch.linalg.norm(diff.view(full_batch, -1), dim = -1).mean()
-
-                heat_cam = utils.to_heatmap(cam_feat, self.depth, self.num_joints, side_out, side_out)
-
-                key_index = self.data_info.key_index
-
-                relat_cam = utils.decode(heat_cam, self.depth_range)
-
-                relat_cam = relat_cam - relat_cam[:, key_index:key_index + 1]
-
-                spec_cam = relat_cam + true_cam[:, key_index:key_index + 1]
-
-                cam_loss = self.criterion(spec_cam.view(-1, 3)[true_val.view(-1)] / self.loss_div, true_cam.view(-1, 3)[true_val.view(-1)] / self.loss_div)
-
-            cam_loss_sum += cam_loss.item() * full_batch
-            cam_loss_samples += full_batch
-
-            dist_loss_sum += dist_loss.item() * full_batch
-            dist_loss_samples += full_batch
-
-            true_val = true_val.cpu().numpy().astype(np.bool)
-
-            spec_cam = spec_cam.cpu().numpy()
-            true_cam = true_cam.cpu().numpy()
-
-            spec_cam = np.einsum('Bij,BCj->BCi', color_br, spec_cam)
-            true_cam = np.einsum('Bij,BCj->BCi', color_br, true_cam)
-
-            utils.save_array(spec_cam, i_batch, self.diff_path)
-
-            cam_stats.append(utils.analyze(spec_cam, true_cam, true_val, self.data_info.mirror, self.thresh))
-
-            message = '[=] test Epoch[{0}] Batch[{1}|{2}] '.format(epoch, i_batch, n_batches)
-            message += ' Cam Loss {:.4f} '.format(cam_loss.item())
-            message += ' Dist Loss {:.4f} '.format(dist_loss.item())
-            print(message)
-
-        cam_loss_sum /= cam_loss_samples
-        dist_loss_sum /= dist_loss_samples
-
-        record = dict(cam_test_loss = cam_loss_sum, dist_test_loss = dist_loss_sum)
-        record.update(utils.parse_epoch(cam_stats))
-
-        print('\n=> test Epoch[%d]  Cam Loss: %1.4f  Dist Loss: %1.4f\n' % (epoch, cam_loss_sum, dist_loss_sum))
-
-        print('=>[SPEC] cam_mean: %1.3f  [pck]: %1.3f  [auc]: %1.3f\n' % (record['cam_mean'], record['score_pck'], record['score_auc']))
-
-        return record
+        if self.half_acc:
+            return cam_feat.float(), last_feat.float()
+        else:
+            return cam_feat, last_feat
