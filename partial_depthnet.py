@@ -162,7 +162,7 @@ class ResNet(nn.Module):
     def __init__(self, block, layers, args):
         
         assert args.depth_only
-        assert args.stride in [16, 32]
+        assert args.stride in [4, 8, 16, 32]
 
         super(ResNet, self).__init__()
 
@@ -170,15 +170,19 @@ class ResNet(nn.Module):
         stride3 = int(np.minimum(np.maximum(np.log2(args.stride), 3), 4) - 2)
         stride4 = int(np.minimum(np.maximum(np.log2(args.stride), 4), 5) - 3)
 
+        dilate2 = (3 - stride2)
+        dilate3 = (3 - stride2) * (3 - stride3)
+        dilate4 = (3 - stride2) * (3 - stride3) * (3 - stride4)
+
         self.conv1 = PartialConv(1, 64, kernel_size = 7, stride = 2, padding = 3, bias = False)
         self.bn1 = nn.BatchNorm2d(64)
         self.maxpool = nn.MaxPool2d(kernel_size = 3, stride = 2, padding = 1)
 
         self.inplanes = 64
         self.layer1 = self._make_layer(block, 64, layers[0], partial = True)
-        self.layer2 = self._make_layer(block, 128, layers[1], stride = stride2, dilation = 3 - stride2, partial = True)
-        self.layer3 = self._make_layer(block, 256, layers[2], stride = stride3, dilation = 3 - stride3)
-        self.layer4 = self._make_layer(block, 512, layers[3], stride = stride4, dilation = 3 - stride4)
+        self.layer2 = self._make_layer(block, 128, layers[1], stride = stride2, dilation = dilate2, partial = True)
+        self.layer3 = self._make_layer(block, 256, layers[2], stride = stride3, dilation = dilate3)
+        self.layer4 = self._make_layer(block, 512, layers[3], stride = stride4, dilation = dilate4)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
