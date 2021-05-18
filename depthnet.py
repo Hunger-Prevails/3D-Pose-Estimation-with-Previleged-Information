@@ -123,7 +123,7 @@ class ResNet(nn.Module):
         super(ResNet, self).__init__()
 
         self.early_dist = args.early_dist
-        self.ahead_relu = args.ahead_relu
+        self.skip_relu = args.skip_relu
         
         stride2 = int(np.minimum(np.maximum(np.log2(args.stride), 2), 3) - 1)
         stride3 = int(np.minimum(np.maximum(np.log2(args.stride), 3), 4) - 2)
@@ -140,8 +140,8 @@ class ResNet(nn.Module):
         self.inplanes = 64
         self.layer1 = self._make_layer(block, 64, layers[0])
         self.layer2 = self._make_layer(block, 128, layers[1], stride = stride2, dilation = dilate2)
-        self.layer3 = self._make_layer(block, 256, layers[2], stride = stride3, dilation = dilate3)
-        self.layer4 = self._make_layer(block, 512, layers[3], stride = stride4, dilation = dilate4)
+        self.layer3 = self._make_layer(block, 256, layers[2], stride = stride3, dilation = dilate3, skip_relu = args.skip_relu)
+        self.layer4 = self._make_layer(block, 512, layers[3], stride = stride4, dilation = dilate4, skip_relu = args.skip_relu)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
@@ -158,7 +158,7 @@ class ResNet(nn.Module):
             if isinstance(module, nn.BatchNorm2d):
                 module.eval()
 
-    def _make_layer(self, block, planes, blocks, stride = 1, dilation = 1):
+    def _make_layer(self, block, planes, blocks, stride = 1, dilation = 1, skip_relu = False):
         downsample = None
         if stride != 1 or self.inplanes != planes * block.expansion:
             downsample = nn.Sequential(
@@ -175,8 +175,11 @@ class ResNet(nn.Module):
         layers = []
         layers.append(block(self.inplanes, planes, stride, dilation, downsample))
         self.inplanes = planes * block.expansion
-        for i in range(1, blocks):
+
+        for i in range(1, blocks - 1):
             layers.append(block(self.inplanes, planes))
+
+        layers.append(block(self.inplanes, planes, skip_relu = skip_relu))
 
         return nn.Sequential(*layers)
 
@@ -189,10 +192,10 @@ class ResNet(nn.Module):
         x = self.layer1(x)
         x = self.layer2(x)
         m = self.layer3(x)
-        x = self.layer4(m)
-        z = self.regressor(x)
+        n = self.layer4(F.relu(m) if self.skip_relu else m)
+        z = self.regressor(F.relu(n) if self.skip_relu else n)
 
-        return z, m if self.early_dist else x
+        return z, m if self.early_dist else n
 
 
 def build_resnet(block, layers, args, pretrain):

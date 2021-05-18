@@ -22,7 +22,7 @@ parser.add_argument('-nexponent', action='store_true', help='whether to feed in 
 parser.add_argument('-partial_conv', action='store_true', help='whether to replace all convs in Resnet with partial convs')
 parser.add_argument('-to_depth', action='store_true', help='whether to convert raw depth to actual depth')
 parser.add_argument('-early_dist', action='store_true', help='whether to impose distillation loss on the third stage feature map')
-parser.add_argument('-ahead_relu', action='store_true', help='whether to impose distillation loss on the feature map before relu is applied')
+parser.add_argument('-skip_relu', action='store_true', help='whether to impose distillation loss on the feature map before relu is applied')
 parser.add_argument('-sigmoid', action='store_true', help='whether to apply sigmoid function to the feature maps before norm is taken')
 parser.add_argument('-save_last', action='store_true', help='whether to save the last feature map of the model')
 parser.add_argument('-do_freeze', action='store_true', help='whether to freeze the batchnorm layers of both networks during distillation')

@@ -21,7 +21,7 @@ def conv3x3(in_planes, out_planes, stride = 1):
 class BasicBlock(nn.Module):
     expansion = 1
 
-    def __init__(self, inplanes, planes, stride=1, dilation=1, downsample=None, skip_relu = False):
+    def __init__(self, inplanes, planes, stride = 1, dilation = 1, downsample = None, skip_relu = False):
         super(BasicBlock, self).__init__()
 
         self.conv1 = nn.Conv2d(
@@ -69,7 +69,7 @@ class BasicBlock(nn.Module):
 class Bottleneck(nn.Module):
     expansion = 4
 
-    def __init__(self, inplanes, planes, stride=1, dilation=1, downsample=None, skip_relu = False):
+    def __init__(self, inplanes, planes, stride = 1, dilation = 1, downsample = None, skip_relu = False):
         super(Bottleneck, self).__init__()
 
         self.conv1 = nn.Conv2d(
@@ -147,7 +147,7 @@ class ResNet(nn.Module):
         super(ResNet, self).__init__()
 
         self.early_dist = args.early_dist
-        self.ahead_relu = args.ahead_relu
+        self.skip_relu = args.skip_relu
 
         stride2 = int(np.minimum(np.maximum(np.log2(args.stride), 2), 3) - 1)
         stride3 = int(np.minimum(np.maximum(np.log2(args.stride), 3), 4) - 2)
@@ -173,8 +173,8 @@ class ResNet(nn.Module):
 
         self.fusion = Fusion(self.inplanes)
 
-        self.layer3 = self._make_layer(block, 256, layers[2], stride = stride3, dilation = dilate3)
-        self.layer4 = self._make_layer(block, 512, layers[3], stride = stride4, dilation = dilate4)
+        self.layer3 = self._make_layer(block, 256, layers[2], stride = stride3, dilation = dilate3, skip_relu = args.skip_relu)
+        self.layer4 = self._make_layer(block, 512, layers[3], stride = stride4, dilation = dilate4, skip_relu = args.skip_relu)
 
         self.inplanes = 64
         self.layer5 = self._make_layer(block, 64, layers[0])
@@ -191,7 +191,7 @@ class ResNet(nn.Module):
 
         self.regressor = nn.Conv2d(512 * block.expansion, args.depth * args.num_joints, 3, padding = 1)
 
-    def _make_layer(self, block, planes, blocks, stride = 1, dilation = 1):
+    def _make_layer(self, block, planes, blocks, stride = 1, dilation = 1, skip_relu = False):
         downsample = None
         if stride != 1 or self.inplanes != planes * block.expansion:
             downsample = nn.Sequential(
@@ -208,8 +208,11 @@ class ResNet(nn.Module):
         layers = []
         layers.append(block(self.inplanes, planes, stride, dilation, downsample))
         self.inplanes = planes * block.expansion
-        for i in range(1, blocks):
+
+        for i in range(1, blocks - 1):
             layers.append(block(self.inplanes, planes))
+
+        layers.append(block(self.inplanes, planes, skip_relu = skip_relu))
 
         return nn.Sequential(*layers)
 
@@ -229,10 +232,10 @@ class ResNet(nn.Module):
         x = self.fusion(x, y)
 
         m = self.layer3(x)
-        x = self.layer4(m)
-        z = self.regressor(x)
+        n = self.layer4(F.relu(m) if self.skip_relu else m)
+        z = self.regressor(F.relu(n) if self.skip_relu else n)
 
-        return z, m if self.early_dist else x
+        return z, m if self.early_dist else n
 
 
 def manual_update(model_dict, toy_dict):
