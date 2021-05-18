@@ -51,6 +51,7 @@ class Trainer:
         self.do_teach = args.do_teach
         self.semi_teach = args.semi_teach
         self.sigmoid = args.sigmoid
+        self.do_freeze = args.do_freeze
 
         with open(os.path.join(root_me, 'metadata.json')) as file:
             metadata = json.load(file)
@@ -86,9 +87,9 @@ class Trainer:
 
         self.warmup = args.warmup
         self.learn_rate = args.learn_rate
+        self.learn_decay = args.learn_decay
         self.num_epochs = args.n_epochs
 
-        self.freeze_factor = args.freeze_factor
         self.warmup_factor = args.warmup_factor
         self.alpha = args.alpha
         self.alpha_warmup = args.alpha_warmup
@@ -134,6 +135,11 @@ class Trainer:
         return semi_batch, dist_loss
 
 
+    def freeze_batchnorm(self):
+        self.teacher.eval()
+        self.model.freeze_batchnorm()
+
+
     def distill_train(self, epoch, data_loader, device):
         n_batches = len(data_loader)
 
@@ -144,6 +150,9 @@ class Trainer:
         dist_loss_samples = 0
 
         side_out = (self.side_in - 1) // self.stride + 1
+
+        if self.do_freeze:
+            self.freeze_batchnorm()
 
         for i_batch, (color_image, depth_image, true_cam, true_val) in enumerate(data_loader):
 
@@ -591,22 +600,18 @@ class Trainer:
     def adapt_learn_rate(self, epoch):
         if epoch - 1 < self.warmup:
             learn_rate = self.learn_rate * self.warmup_factor
-            learn_rate_bn = self.learn_rate * self.warmup_factor
 
         elif epoch - 1 < self.num_epochs * 0.6:
             learn_rate = self.learn_rate
-            learn_rate_bn = self.learn_rate
 
         elif epoch - 1 < self.num_epochs * 0.8:
-            learn_rate = self.learn_rate * 0.2
-            learn_rate_bn = self.learn_rate * self.freeze_factor
+            learn_rate = self.learn_rate * self.learn_decay
 
         else:
-            learn_rate = self.learn_rate * (0.2 ** 2)
-            learn_rate_bn = self.learn_rate * (self.freeze_factor ** 2)
+            learn_rate = self.learn_rate * self.learn_decay * self.learn_decay
 
         self.optimizer.param_groups[0]['lr'] = learn_rate
-        self.optimizer.param_groups[1]['lr'] = learn_rate_bn
+        self.optimizer.param_groups[1]['lr'] = learn_rate
 
 
     def get_dist_weight(self, epoch):

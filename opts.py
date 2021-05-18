@@ -24,6 +24,7 @@ parser.add_argument('-to_depth', action='store_true', help='whether to convert r
 parser.add_argument('-early_dist', action='store_true', help='whether to impose distillation loss on the third stage feature map')
 parser.add_argument('-sigmoid', action='store_true', help='whether to apply sigmoid function to the feature maps before norm is taken')
 parser.add_argument('-save_last', action='store_true', help='whether to save the last feature map of the model')
+parser.add_argument('-do_freeze', action='store_true', help='whether to freeze the batchnorm layers of both networks during distillation')
 
 # augmentation options
 parser.add_argument('-geometry', action='store_true', help='whether to perform geometry augmentation')
@@ -56,8 +57,8 @@ parser.add_argument('-depth', default=16, type=int, help='depth side of volumetr
 
 # train options
 parser.add_argument('-warmup_factor', default=0.2, type=float, help='learn rate decay for warmup epochs')
-parser.add_argument('-freeze_factor', default=0.2, type=float, help='learn rate decay for batchnorm layers')
 parser.add_argument('-learn_rate', default=5e-5, type=float, help='base learn rate for train')
+parser.add_argument('-learn_decay', default=0.2, type=float, help='learn rate decay factor')
 parser.add_argument('-grad_norm', default=5.0, type=float, help='norm for gradient clip')
 parser.add_argument('-grad_scaling', default=32.0, type=float, help='magnitude of loss scaling when performing float16 computation')
 parser.add_argument('-momentum', default=0.9, type=float, help='Momentum for training')

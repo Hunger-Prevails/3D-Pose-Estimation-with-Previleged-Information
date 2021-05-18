@@ -142,6 +142,11 @@ class ResNet(nn.Module):
 
         self.regressor = nn.Conv2d(512 * block.expansion, args.depth * args.num_joints, 3, padding = 1)
 
+    def freeze_batchnorm(self):
+        for module in self.modules():
+            if isinstance(module, nn.BatchNorm2d):
+                module.eval()
+
     def _make_layer(self, block, planes, blocks, stride = 1, dilation = 1):
         downsample = None
         if stride != 1 or self.inplanes != planes * block.expansion:
