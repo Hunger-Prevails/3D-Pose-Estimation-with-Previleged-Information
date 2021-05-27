@@ -3,6 +3,7 @@ import json
 import utils
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import numpy as np
 import torch.optim as optim
 import importlib
@@ -51,6 +52,7 @@ class Trainer:
         self.do_teach = args.do_teach
         self.semi_teach = args.semi_teach
         self.sigmoid = args.sigmoid
+        self.bin_dist = args.bin_dist
         self.do_freeze = args.do_freeze
 
         with open(os.path.join(root_me, 'metadata.json')) as file:
@@ -108,13 +110,30 @@ class Trainer:
         return image.half().to(device) if self.half_acc else image.to(device)
 
 
-    def semi_train(self, device):
+    def distill(self, batch, teach_last, last_feat, atten_map):
+        if self.bin_dist:
+            diff = (torch.sigmoid(teach_last) - torch.sigmoid(last_feat)) if self.sigmoid else (teach_last - last_feat)  # (batch, 1024, 17, 17)
+
+            diff = torch.mul(diff, atten_map)
+
+            dist_loss = torch.linalg.norm(diff.view(batch, -1), dim = -1).mean()
+        else:
+            diff = F.binary_cross_entropy_with_logits(torch.sigmoid(last_feat), torch.sigmoid(teach_last))  # (batch, 1024, 17, 17)
+
+            diff = torch.mul(diff, atten_map)
+
+            dist_loss = torch.sum(diff.view(batch, -1), dim = -1).mean()
+
+        return dist_loss
+
+
+    def semi_train(self, device, i_batch):
         try:
-            color_image, depth_image, true_cam, true_val = next(self.semi_worker)
+            color_image, depth_image, true_cam, true_val, atten_map = next(self.semi_worker)
         except:
             self.semi_worker = iter(self.semi_loader)
 
-            color_image, depth_image, true_cam, true_val = next(self.semi_worker)
+            color_image, depth_image, true_cam, true_val, atten_map = next(self.semi_worker)
 
         color_image = self.to(color_image, device)
         depth_image = self.to(depth_image, device)
@@ -124,13 +143,9 @@ class Trainer:
         with torch.no_grad():
             teach_cam, teach_last = self.teach_infer(color_image, depth_image)
 
-        cam_feat, last_feat = self.model(color_image)
-        if self.half_acc:
-            last_feat = last_feat.float()
+        cam_feat, last_feat = self.vanilla_infer(color_image, i_batch, True)
 
-        diff = (torch.sigmoid(teach_last) - torch.sigmoid(last_feat)) if self.sigmoid else (teach_last - last_feat)
-
-        dist_loss = torch.linalg.norm(diff.view(semi_batch, -1), dim = -1).mean()
+        dist_loss = self.distill(semi_batch, teach_last, last_feat, atten_map)
 
         return semi_batch, dist_loss
 
@@ -154,7 +169,9 @@ class Trainer:
         if self.do_freeze:
             self.freeze_batchnorm()
 
-        for i_batch, (color_image, depth_image, true_cam, true_val) in enumerate(data_loader):
+        for i_batch, batch_tuple in enumerate(data_loader):
+
+            color_image, depth_image, true_cam, true_val, atten_map = batch_tuple
 
             color_image = self.to(color_image, device)
             depth_image = self.to(depth_image, device)
@@ -169,9 +186,7 @@ class Trainer:
 
             cam_feat, last_feat = self.vanilla_infer(color_image, i_batch, True)
 
-            diff = (torch.sigmoid(teach_last) - torch.sigmoid(last_feat)) if self.sigmoid else (teach_last - last_feat)
-
-            dist_loss = torch.linalg.norm(diff.view(full_batch, -1), dim = -1).mean()
+            dist_loss = self.distill(full_batch, teach_last, last_feat, atten_map)
 
             heat_cam = utils.to_heatmap(cam_feat, self.depth, self.num_joints, side_out, side_out)
 
@@ -198,7 +213,7 @@ class Trainer:
             loss = dist_loss * self.get_dist_weight(epoch) + cam_loss
 
             if self.semi_teach:
-                semi_batch, semi_dist_loss = self.semi_train(device)
+                semi_batch, semi_dist_loss = self.semi_train(device, i_batch)
 
                 dist_loss_sum += semi_dist_loss.item() * semi_batch
                 dist_loss_samples += semi_batch
@@ -601,14 +616,17 @@ class Trainer:
         if epoch - 1 < self.warmup:
             learn_rate = self.learn_rate * self.warmup_factor
 
-        elif epoch - 1 < self.num_epochs * 0.6:
+        elif epoch - 1 < 15:
             learn_rate = self.learn_rate
 
-        elif epoch - 1 < self.num_epochs * 0.8:
+        elif epoch - 1 < 20:
             learn_rate = self.learn_rate * self.learn_decay
 
-        else:
+        elif epoch - 1 < 25:
             learn_rate = self.learn_rate * self.learn_decay * self.learn_decay
+
+        else:
+            learn_rate = self.learn_rate * self.learn_decay * self.learn_decay * self.learn_decay
 
         self.optimizer.param_groups[0]['lr'] = learn_rate
         self.optimizer.param_groups[1]['lr'] = learn_rate

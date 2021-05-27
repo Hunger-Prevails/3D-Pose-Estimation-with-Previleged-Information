@@ -46,6 +46,7 @@ class BasicBlock(nn.Module):
         
         self.downsample = downsample
         self.stride = stride
+        self.skip_relu = skip_relu
 
     def forward(self, x):
         residual = x
@@ -60,7 +61,7 @@ class BasicBlock(nn.Module):
         if self.downsample is not None:
             residual = self.downsample(x)
 
-        if skip_relu:
+        if self.skip_relu:
             return out + residual
         else:
             return F.relu(out + residual)
@@ -101,6 +102,7 @@ class Bottleneck(nn.Module):
 
         self.downsample = downsample
         self.stride = stride
+        self.skip_relu = skip_relu
 
     def forward(self, x):
         residual = x
@@ -119,7 +121,7 @@ class Bottleneck(nn.Module):
         if self.downsample is not None:
             residual = self.downsample(x)
 
-        if skip_relu:
+        if self.skip_relu:
             return out + residual
         else:
             return F.relu(out + residual)

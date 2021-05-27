@@ -84,6 +84,8 @@ class Dataset(data.Dataset):
         self.random_zoom = args.random_zoom
         self.to_depth = args.to_depth
 
+        self.attention = args.attention
+
         self.transform = transforms.Compose([
             transforms.ToTensor(),
             transforms.Normalize(mean = self.mean, std = self.dev)])
@@ -222,8 +224,13 @@ class Dataset(data.Dataset):
 
         if self.at_test:
             back_rotate = sample['camera'].R @ new_color_cam.R.T
-
             return color_image, depth_image, camera_coords, valid, back_rotate
+
+        elif self.do_teach:
+            image_coords = new_color_cam.camera_to_image(camera_coords)
+            atten_map = utils.get_attention(self.side_in, self.stride, image_coords, self.attention)
+            return color_image, depth_image, camera_coords, valid, atten_map
+
         else:
             return color_image, depth_image, camera_coords, valid
 

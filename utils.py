@@ -11,6 +11,34 @@ import pyyolo
 
 from builtins import zip as xzip
 
+def get_attention(side_in, stride, image_coords, attention):
+	'''
+	generate an attention map of given shape based on radial distances to the given image coords
+
+	Args:
+	    image_coords: (num_joints, 2)
+	'''
+	side_out = (side_in - 1) // stride + 1
+
+	if attention:
+		cx, cy = np.meshgrid(np.arange(side_out), np.arange(side_out))
+
+		cx = np.expand_dims(cx, -1)
+		cy = np.expand_dims(cy, -1)
+
+		dist_x = cx - image_coords[:, 0] / (side_in / side_out)
+		dist_y = cy - image_coords[:, 1] / (side_in / side_out)
+
+		dist = dist_x ** 2 + dist_y ** 2
+
+		radial = np.exp(- dist / 5.0)
+
+		radial = radial.sum(axis = -1)
+
+		return radial / np.amax(radial)
+	else:
+		return np.ones((side_out, side_out))
+
 
 def save_array(array, i_batch, last_path):
 	save_file = os.path.join(last_path, 'batch_' + str(i_batch) + '_spec.npy')
