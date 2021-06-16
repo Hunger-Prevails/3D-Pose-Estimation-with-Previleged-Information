@@ -84,7 +84,9 @@ class Dataset(data.Dataset):
         self.random_zoom = args.random_zoom
         self.to_depth = args.to_depth
 
+        self.do_teach = args.do_teach
         self.attention = args.attention
+        self.stride = args.stride
 
         self.transform = transforms.Compose([
             transforms.ToTensor(),

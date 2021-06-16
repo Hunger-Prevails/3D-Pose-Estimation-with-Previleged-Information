@@ -50,10 +50,7 @@ def create_model(args):
 
         assert os.path.exists(save_path)
 
-        best = torch.load(os.path.join(save_path, 'best.pth'))
-        best = best['best'];
-
-        checkpoint = os.path.join(save_path, 'model_{}.pth'.format(best))
+        checkpoint = os.path.join(save_path, 'model_{}.pth'.format(args.n_epochs))
         print('=> Loads checkpoint from ' + checkpoint)
         checkpoint = torch.load(checkpoint)['model']
 

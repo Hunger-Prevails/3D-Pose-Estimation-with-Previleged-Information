@@ -35,9 +35,11 @@ def get_attention(side_in, stride, image_coords, attention):
 
 		radial = radial.sum(axis = -1)
 
-		return radial / np.amax(radial)
+		radial = radial / np.amax(radial)
 	else:
-		return np.ones((side_out, side_out))
+		radial = np.ones((side_out, side_out))
+
+	return radial[None, :, :]
 
 
 def save_array(array, i_batch, last_path):

@@ -66,6 +66,7 @@ class Trainer:
 
         if args.semi_teach:
             args.data_name = 'pku'
+            args.batch_size = args.semi_batch
             self.semi_loader = get_loader(args).data_loader(args, 'train', data_info)
             self.semi_worker = iter(self.semi_loader)
 
@@ -112,17 +113,17 @@ class Trainer:
 
     def distill(self, batch, teach_last, last_feat, atten_map):
         if self.bin_dist:
+            diff = F.binary_cross_entropy_with_logits(last_feat, torch.sigmoid(teach_last))  # (batch, 1024, 17, 17)
+
+            diff = torch.mul(diff, atten_map)
+
+            dist_loss = torch.sum(diff.view(batch, -1), dim = -1).mean()
+        else:
             diff = (torch.sigmoid(teach_last) - torch.sigmoid(last_feat)) if self.sigmoid else (teach_last - last_feat)  # (batch, 1024, 17, 17)
 
             diff = torch.mul(diff, atten_map)
 
             dist_loss = torch.linalg.norm(diff.view(batch, -1), dim = -1).mean()
-        else:
-            diff = F.binary_cross_entropy_with_logits(torch.sigmoid(last_feat), torch.sigmoid(teach_last))  # (batch, 1024, 17, 17)
-
-            diff = torch.mul(diff, atten_map)
-
-            dist_loss = torch.sum(diff.view(batch, -1), dim = -1).mean()
 
         return dist_loss
 
@@ -137,6 +138,7 @@ class Trainer:
 
         color_image = self.to(color_image, device)
         depth_image = self.to(depth_image, device)
+        atten_map = self.to(atten_map, device)
 
         semi_batch = true_cam.size(0)
 
@@ -175,6 +177,7 @@ class Trainer:
 
             color_image = self.to(color_image, device)
             depth_image = self.to(depth_image, device)
+            atten_map = self.to(atten_map, device)
 
             true_cam = true_cam.to(device)
             true_val = true_val.to(device)
