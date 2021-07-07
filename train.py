@@ -290,7 +290,7 @@ class Trainer:
 
         print('\n=> test Epoch[%d]  Cam Loss: %1.4f  Mat Loss: %1.4f\n' % (epoch, cam_loss_avg, mat_loss_avg))
 
-        print('=>mat_mean: %1.3f  [oks]: %1.3f\n' % (record['mat_mean'], record['score_oks']))
+        print('=> mat_mean: %1.3f  [oks]: %1.3f\n' % (record['mat_mean'], record['score_oks']))
 
         print('=>[SPEC] cam_mean: %1.3f  [pck]: %1.3f  [auc]: %1.3f\n' % (record['cam_mean'], record['score_pck'], record['score_auc']))
 

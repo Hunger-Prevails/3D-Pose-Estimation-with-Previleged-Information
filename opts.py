@@ -58,6 +58,7 @@ parser.add_argument('-side_in', default=257, type=int, help='side of input image
 parser.add_argument('-stride', default=16, type=int, help='stride of network for train')
 parser.add_argument('-num_joints', default=19, type=int, help='number of joints in the dataset')
 parser.add_argument('-depth', default=16, type=int, help='depth side of volumetric heatmap')
+parser.add_argument('-alpha_span', default=10, type=int, help='warmup span of distillation setup')
 
 # train options
 parser.add_argument('-warmup_factor', default=0.2, type=float, help='learn rate decay for warmup epochs')
@@ -68,8 +69,8 @@ parser.add_argument('-grad_scaling', default=32.0, type=float, help='magnitude o
 parser.add_argument('-momentum', default=0.9, type=float, help='Momentum for training')
 parser.add_argument('-weight_decay', default=4e-5, type=float, help='Weight decay for training')
 parser.add_argument('-box_margin', default=0.6, type=float, help='factor for generating pseudo bbox from image coords')
-parser.add_argument('-alpha', default=0.1, type=float, help='loss weight for alpha blend')
-parser.add_argument('-alpha_warmup', default=0.1, type=float, help='warmup value for alpha under distillation setup')
+parser.add_argument('-alpha_dest', default=0.1, type=float, help='dest value for alpha under distillation setup')
+parser.add_argument('-alpha_init', default=0.1, type=float, help='init value for alpha under distillation setup')
 parser.add_argument('-depth_range', default=1000.0, type=float, help='depth range of prediction')
 parser.add_argument('-random_zoom', default=0.9, type=float, help='scale for random zoom operation')
 parser.add_argument('-loss_div', default=10.0, type=float, help='divisor applied to both ground-truth and estimation before loss is calculated')

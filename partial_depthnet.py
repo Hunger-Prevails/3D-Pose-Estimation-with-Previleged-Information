@@ -224,8 +224,9 @@ class ResNet(nn.Module):
 
         x = self.layer3(x)
         x = self.layer4(x)
+        z = self.regressor(x)
 
-        return self.regressor(x)
+        return z, x
 
 
 def build_resnet(block, layers, args, pretrain):

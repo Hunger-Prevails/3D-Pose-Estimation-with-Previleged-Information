@@ -94,8 +94,9 @@ class Trainer:
         self.num_epochs = args.n_epochs
 
         self.warmup_factor = args.warmup_factor
-        self.alpha = args.alpha
-        self.alpha_warmup = args.alpha_warmup
+        self.alpha_dest = args.alpha_dest
+        self.alpha_init = args.alpha_init
+        self.alpha_span = args.alpha_span
         self.grad_norm = args.grad_norm
         self.grad_scaling = args.grad_scaling
         self.loss_div = args.loss_div
@@ -170,6 +171,8 @@ class Trainer:
 
         if self.do_freeze:
             self.freeze_batchnorm()
+
+        print('\n=> alpha value: {:.2f}'.format(self.get_dist_weight(epoch)))
 
         for i_batch, batch_tuple in enumerate(data_loader):
 
@@ -636,12 +639,12 @@ class Trainer:
 
 
     def get_dist_weight(self, epoch):
-        alphas = np.linspace(self.alpha_warmup, self.alpha, 10)
+        alphas = np.linspace(self.alpha_init, self.alpha_dest, self.alpha_span)
 
-        if epoch - 1 < 10:
+        if epoch - 1 < self.alpha_span:
             return alphas[epoch - 1]
         else:
-            return self.alpha
+            return self.alpha_dest
 
 
     def vanilla_infer(self, in_image, i_batch, ret_last = False):
