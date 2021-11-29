@@ -119,14 +119,14 @@ class Bottleneck(nn.Module):
 class ResNet(nn.Module):
 
     def __init__(self, block, layers, args):
-        
+
         assert args.stride in [4, 8, 16, 32]
 
         super(ResNet, self).__init__()
 
         self.early_dist = args.early_dist
         self.skip_relu = args.skip_relu
-        
+
         stride2 = int(np.minimum(np.maximum(np.log2(args.stride), 2), 3) - 1)
         stride3 = int(np.minimum(np.maximum(np.log2(args.stride), 3), 4) - 2)
         stride4 = int(np.minimum(np.maximum(np.log2(args.stride), 4), 5) - 3)

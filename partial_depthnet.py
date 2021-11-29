@@ -160,7 +160,7 @@ class Bottleneck(nn.Module):
 class ResNet(nn.Module):
 
     def __init__(self, block, layers, args):
-        
+
         assert args.depth_only
         assert args.stride in [4, 8, 16, 32]
 

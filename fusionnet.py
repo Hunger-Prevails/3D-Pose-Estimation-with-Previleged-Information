@@ -143,7 +143,7 @@ class Fusion(nn.Module):
 class ResNet(nn.Module):
 
     def __init__(self, block, layers, args):
-        
+
         assert args.stride in [4, 8, 16, 32]
 
         super(ResNet, self).__init__()
@@ -163,7 +163,7 @@ class ResNet(nn.Module):
 
         self.conv1 = nn.Conv2d(3, 64, kernel_size = 7, stride = 2, padding = 3, bias = False)
         self.conv2 = nn.Conv2d(1, 64, kernel_size = 7, stride = 2, padding = 3, bias = False)
-        
+
         self.bn1 = nn.BatchNorm2d(64)
         self.bn2 = nn.BatchNorm2d(64)
 

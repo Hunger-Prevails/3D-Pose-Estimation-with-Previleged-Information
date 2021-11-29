@@ -122,16 +122,20 @@ class Bottleneck(nn.Module):
 class ResNet(nn.Module):
 
     def __init__(self, block, layers, args):
-        
+
         assert args.stride in [16, 32]
 
         super(ResNet, self).__init__()
 
         self.inplanes = 64
-        
+
         stride2 = int(np.minimum(np.maximum(np.log2(args.stride), 2), 3) - 1)
         stride3 = int(np.minimum(np.maximum(np.log2(args.stride), 3), 4) - 2)
         stride4 = int(np.minimum(np.maximum(np.log2(args.stride), 4), 5) - 3)
+
+        dilate2 = (3 - stride2)
+        dilate3 = (3 - stride2) * (3 - stride3)
+        dilate4 = (3 - stride2) * (3 - stride3) * (3 - stride4)
 
         side_out = (args.side_in - 1) / args.stride + 1
 
@@ -140,9 +144,9 @@ class ResNet(nn.Module):
         self.maxpool = nn.MaxPool2d(kernel_size = 3, stride = 2, padding = 1)
 
         self.layer1 = self._make_layer(block, 64, layers[0])
-        self.layer2 = self._make_layer(block, 128, layers[1], stride = stride2, dilation = 3 - stride2)
-        self.layer3 = self._make_layer(block, 256, layers[2], stride = stride3, dilation = 3 - stride3)
-        self.layer4 = self._make_layer(block, 512, layers[3], stride = stride4, dilation = 3 - stride4)
+        self.layer2 = self._make_layer(block, 128, layers[1], stride = stride2, dilation = dilate2)
+        self.layer3 = self._make_layer(block, 256, layers[2], stride = stride3, dilation = dilate3)
+        self.layer4 = self._make_layer(block, 512, layers[3], stride = stride4, dilation = dilate4)
 
         for m in self.modules():
             if isinstance(m, nn.Conv2d):
